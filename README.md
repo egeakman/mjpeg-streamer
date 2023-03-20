@@ -37,11 +37,15 @@ while True:
     stream.set_frame(frame)
 
 server.stop()
+cap.release()
+cv2.destroyAllWindows()
 ```
 
 This example starts the MJPEG server on localhost:8080 and streams video from the default webcam. The video is resized to 640x480 pixels, compressed with JPEG quality of 50, and streamed at 30 FPS.
 
 To view the video stream, you can open a web browser and navigate to http://localhost:8080/my_camera.
+
+Check out the [tests](tests) directory for more examples.
 
 ## Class Reference
 

@@ -75,9 +75,7 @@ class MjpegServer:
         self._host = host
         self._port = port
         self._app = web.Application()
-        self._cam_routes: List[
-            str,
-        ] = []
+        self._cam_routes: List[str,] = []
 
     async def __root_handler(self, _) -> web.Response:
         text = "<h2>Available streams:</h2>\n\n"
@@ -94,7 +92,13 @@ class MjpegServer:
 
     def __start_func(self) -> None:
         self._app.router.add_route("GET", "/", self.__root_handler)
-        web.run_app(self._app, host=self._host, port=self._port)
+        runner = web.AppRunner(self._app)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(runner.setup())
+        site = web.TCPSite(runner, self._host, self._port)
+        loop.run_until_complete(site.start())
+        loop.run_forever()
 
     def start(self) -> None:
         thread = threading.Thread(target=self.__start_func, daemon=True)
