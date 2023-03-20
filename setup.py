@@ -11,9 +11,9 @@ setup(
     description="Simple MJPEG streamer for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="2023.3.19",
+    version="2023.3.20",
     license="AGPLv3",
-    download_url="https://github.com/egeakman/mjpeg-streamer/archive/2023.3.19.tar.gz",
+    download_url="https://github.com/egeakman/mjpeg-streamer/archive/2023.3.20.tar.gz",
     packages=find_packages(where=".", exclude=["tests"]),
     python_requires=">=3.6",
     install_requires=[
