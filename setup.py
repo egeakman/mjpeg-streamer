@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from .mjpeg_streamer import __version__
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
@@ -11,16 +12,17 @@ setup(
     description="Simple MJPEG streamer for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    version="2023.3.20",
+    version=__version__,
     license="AGPLv3",
-    download_url="https://github.com/egeakman/mjpeg-streamer/archive/2023.3.20.tar.gz",
+    download_url=f"https://github.com/egeakman/mjpeg-streamer/archive/{__version__}.tar.gz",
     packages=find_packages(where=".", exclude=["tests"]),
     python_requires=">=3.6",
     install_requires=[
         "setuptools",
         "numpy",
-        "opencv-python",
+        "opencv-python==4.6.0.66",
         "aiohttp",
+        "netifaces",
     ],
     keywords=[
         "aiohttp",

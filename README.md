@@ -2,7 +2,7 @@
 
 ## Overview
 
-The mjpeg-streamer package provides a simple and efficient way to stream MJPEG video from OpenCV-compatible sources over HTTP. It provides a flexible interface that allows users to specify the video source and configure various parameters such as image size, quality, and FPS.
+The mjpeg-streamer package provides a simple, flexible and efficient way to stream MJPEG video from OpenCV-compatible sources over HTTP. It provides a flexible interface that allows users to specify the video source and configure various parameters such as image size, quality, and FPS.
 
 ## Installation
 
@@ -41,11 +41,11 @@ cap.release()
 cv2.destroyAllWindows()
 ```
 
-This example starts the MJPEG server on localhost:8080 and streams video from the default webcam. The video is resized to 640x480 pixels, compressed with JPEG quality of 50, and streamed at 30 FPS.
+This example starts the MJPEG server on localhost:8080 and streams video from the webcam with the index of ``0``. The video is resized to 640x480 pixels, compressed with JPEG quality of 50, and streamed at 30 FPS.
 
 To view the video stream, you can open a web browser and navigate to http://localhost:8080/my_camera.
 
-Check out the [tests](tests) directory for more examples.
+Don't forget to check out the [tests](tests) directory for more examples.
 
 ## Class Reference
 

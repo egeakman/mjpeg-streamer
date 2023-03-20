@@ -3,9 +3,10 @@ from mjpeg_streamer import MjpegServer, Stream
 
 cap = cv2.VideoCapture(0)
 
-stream = Stream("my_camera", size=(640, 480), quality=50, fps=30)
+stream = Stream("first_source", size=(640, 480), quality=50, fps=30)
 
-server = MjpegServer("localhost", 8080)
+# You can have a single server running on multiple addresses
+server = MjpegServer(["localhost", "192.168.1.100"], 8080)
 server.add_stream(stream)
 server.start()
 

@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 
 import aiohttp
 import cv2
+import netifaces
 import numpy as np
 from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
@@ -17,7 +18,7 @@ class Stream:
         quality: int = 50,
         fps: int = 24,
     ) -> None:
-        self.name = name
+        self.name = name.lower().casefold().replace(" ", "_")
         self.size = size
         self.quality = max(1, min(quality, 100))
         self.fps = fps
@@ -71,23 +72,49 @@ class _StreamHandler:
 
 
 class MjpegServer:
-    def __init__(self, host: str = "localhost", port: int = 8080) -> None:
-        self._host = host
+    def __init__(self, host: str or list = "localhost", port: int = 8080) -> None:
+        if isinstance(host, str) and host != "0.0.0.0":
+            self._host = [host]
+        elif isinstance(host, list):
+            if "0.0.0.0" in host:
+                host.remove("0.0.0.0")
+                host = host + [
+                    netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
+                    for iface in netifaces.interfaces()
+                    if netifaces.AF_INET in netifaces.ifaddresses(iface)
+                ]
+            self._host = list(dict.fromkeys(host))
+        else:
+            self._host = [
+                netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
+                for iface in netifaces.interfaces()
+                if netifaces.AF_INET in netifaces.ifaddresses(iface)
+            ]
         self._port = port
         self._app = web.Application()
-        self._cam_routes: List[str,] = []
+        self._app.is_running = False
+        self._cap_routes: List[
+            str,
+        ] = []
+
+    def is_running(self) -> bool:
+        return self._app.is_running
 
     async def __root_handler(self, _) -> web.Response:
         text = "<h2>Available streams:</h2>\n\n"
-        for route in self._cam_routes:
-            text += f"<a href='http://{self._host}:{self._port}{route}'>{route}</a>\n\n"
+        for route in self._cap_routes:
+            text += (
+                f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n\n"
+            )
         return aiohttp.web.Response(text=text, content_type="text/html")
 
     def add_stream(self, stream: Stream) -> None:
+        if self.is_running():
+            raise RuntimeError("Cannot add stream after the server has started")
         route = f"/{stream.name}"
-        if route in self._cam_routes:
-            raise ValueError(f"Route {route} already exists")
-        self._cam_routes.append(route)
+        if route in self._cap_routes:
+            raise ValueError(f"A stream with the name {route} already exists")
+        self._cap_routes.append(route)
         self._app.router.add_route("GET", route, _StreamHandler(stream))
 
     def __start_func(self) -> None:
@@ -101,8 +128,22 @@ class MjpegServer:
         loop.run_forever()
 
     def start(self) -> None:
+        if self.is_running():
+            print("Server is already running")
+            return
+        print("Address(es):")
+        for addr in self._host:
+            print(f"http://{addr}:{str(self._port)}")
+        print("Available streams:")
+        for route in self._cap_routes:
+            print(route)
         thread = threading.Thread(target=self.__start_func, daemon=True)
         thread.start()
+        self._app.is_running = True
 
     def stop(self) -> None:
-        raise GracefulExit()
+        if self.is_running():
+            self._app.is_running = False
+            raise GracefulExit()
+        else:
+            print("Server is not running")
