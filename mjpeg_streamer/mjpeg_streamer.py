@@ -93,9 +93,7 @@ class MjpegServer:
         self._port = port
         self._app = web.Application()
         self._app.is_running = False
-        self._cap_routes: List[
-            str,
-        ] = []
+        self._cap_routes: List[str,] = []
 
     def is_running(self) -> bool:
         return self._app.is_running

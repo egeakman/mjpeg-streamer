@@ -1,5 +1,6 @@
 from setuptools import find_packages, setup
-from mjpeg_streamer import __version__
+
+__version__ = "2023.3.23"
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
