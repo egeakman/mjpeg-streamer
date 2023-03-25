@@ -29,7 +29,7 @@ class Stream:
     def set_frame(self, frame: np.ndarray) -> None:
         self._frame = frame
         
-    def get_bandwidth(self):
+    def get_bandwidth(self) -> float:
         global byte_frame_size
         if len(byte_frame_size) > self.fps:
             for _ in range(len(byte_frame_size) - self.fps):
