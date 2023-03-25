@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import threading
 from typing import List, Optional, Tuple
 
@@ -27,6 +28,13 @@ class Stream:
 
     def set_frame(self, frame: np.ndarray) -> None:
         self._frame = frame
+        
+    def get_bandwidth(self):
+        global byte_frame_size
+        if len(byte_frame_size) > self.fps:
+            for _ in range(len(byte_frame_size) - self.fps):
+                byte_frame_size.pop(0)
+        return sum(byte_frame_size)
 
     async def _get_frame(self) -> np.ndarray:
         async with self._lock:
@@ -35,9 +43,12 @@ class Stream:
 
 class _StreamHandler:
     def __init__(self, stream: Stream) -> None:
+        global byte_frame_size
         self._stream = stream
+        byte_frame_size = []
 
     async def __call__(self, request: web.Request) -> web.StreamResponse:
+        global byte_frame_size
         response = web.StreamResponse(
             status=200,
             reason="OK",
@@ -56,10 +67,12 @@ class _StreamHandler:
             val, frame = cv2.imencode(
                 ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self._stream.quality]
             )
-
+            
             if not val:
                 print("Error while encoding frame")
                 break
+            
+            byte_frame_size.append(sys.getsizeof(frame.tobytes()))
 
             with MultipartWriter("image/jpeg", boundary="image-boundary") as mpwriter:
                 mpwriter.append(frame.tobytes(), {"Content-Type": "image/jpeg"})

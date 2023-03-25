@@ -72,6 +72,16 @@ Creates a new Stream instance with the given unique name, image size, JPEG quali
 
 <br>
 
+- *get_bandwidth*
+
+    ```python
+    get_bandwidth()
+    ```
+
+    Returns the bandwidth of the stream in bytes per second.
+
+<br>
+
 - *_get_frame* (private)
 
     ```python
