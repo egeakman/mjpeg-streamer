@@ -28,7 +28,7 @@ class Stream:
 
     def set_frame(self, frame: np.ndarray) -> None:
         self._frame = frame
-        
+
     def get_bandwidth(self) -> float:
         global byte_frame_size
         if len(byte_frame_size) > self.fps:
@@ -67,11 +67,11 @@ class _StreamHandler:
             val, frame = cv2.imencode(
                 ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self._stream.quality]
             )
-            
+
             if not val:
                 print("Error while encoding frame")
                 break
-            
+
             byte_frame_size.append(sys.getsizeof(frame.tobytes()))
 
             with MultipartWriter("image/jpeg", boundary="image-boundary") as mpwriter:

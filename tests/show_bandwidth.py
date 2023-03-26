@@ -16,7 +16,7 @@ while True:
         break
 
     stream.set_frame(frame)
-    
+
     # Print the bandwidth in KB/s
     print(round(stream.get_bandwidth() / 1024, 2), "KB/s")
 
