@@ -158,3 +158,4 @@ class MjpegServer:
             raise GracefulExit()
         else:
             print("Server is not running")
+            return
