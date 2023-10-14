@@ -145,8 +145,8 @@ class MjpegServer:
 
         print("Available streams:")
         for addr in self._host:
-            for route in self._cap_routes:
-                print(f"http://{addr}:{str(self._port)}/{route}")
+            for route in self._cap_routes:  # route has a leading slash
+                print(f"http://{addr}:{str(self._port)}{route}")
             print("--------------------------------")
         thread = threading.Thread(target=self.__start_func, daemon=True)
         thread.start()

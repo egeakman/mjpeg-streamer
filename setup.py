@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-__version__ = "2023.3.26"
+__version__ = "2023.10.14"
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
@@ -21,7 +21,7 @@ setup(
     install_requires=[
         "setuptools",
         "numpy",
-        "opencv-python==4.6.0.66",
+        "opencv-python",
         "aiohttp",
         "netifaces",
     ],
@@ -55,6 +55,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
         "Operating System :: Microsoft :: Windows",
         "Operating System :: POSIX :: Linux",
