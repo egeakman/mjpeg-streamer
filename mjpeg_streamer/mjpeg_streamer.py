@@ -142,12 +142,12 @@ class MjpegServer:
         if self.is_running():
             print("Server is already running")
             return
-        print("Address(es):")
-        for addr in self._host:
-            print(f"http://{addr}:{str(self._port)}")
+
         print("Available streams:")
-        for route in self._cap_routes:
-            print(route)
+        for addr in self._host:
+            for route in self._cap_routes:
+                print(f"http://{addr}:{str(self._port)}/{route}")
+            print("--------------------------------")
         thread = threading.Thread(target=self.__start_func, daemon=True)
         thread.start()
         self._app.is_running = True
