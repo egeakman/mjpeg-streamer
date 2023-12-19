@@ -1,11 +1,10 @@
-import cv2
 from mjpeg_streamer import MjpegServer, Stream
 
-cap = cv2.VideoCapture(0)
+cap = 0
 
 # You can feed multiple streams from the same source
-stream = Stream("my_source", size=(640, 480), quality=50, fps=30)
-stream2 = Stream("my_source2", size=(320, 240), quality=20, fps=10)
+stream = Stream("my_source", cap, size=(640, 480), quality=50, fps=30)
+stream2 = Stream("my_source2", cap, size=(320, 240), quality=20, fps=10)
 
 # You can also have multiple servers streaming the same stream
 server = MjpegServer("localhost", 8080)
@@ -18,17 +17,7 @@ server.start()
 server2.start()
 server3.start()
 
-while True:
-    _, frame = cap.read()
-    cv2.imshow(stream.name, frame)
-    if cv2.waitKey(1) == ord("q"):
-        break
-
-    stream.set_frame(frame)
-    stream2.set_frame(frame)
+while input() != 'q':
+    pass
 
 server.stop()
-server2.stop()
-server3.stop()
-cap.release()
-cv2.destroyAllWindows()

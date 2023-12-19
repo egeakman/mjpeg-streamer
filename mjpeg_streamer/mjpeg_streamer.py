@@ -15,19 +15,18 @@ class Stream:
     def __init__(
         self,
         name: str,
+        videoSrc: int | str,
         size: Optional[Tuple[int, int]] = None,
         quality: int = 50,
         fps: int = 24,
     ) -> None:
         self.name = name.lower().casefold().replace(" ", "_")
+        self.src = videoSrc
+        self._capturing = False
         self.size = size
         self.quality = max(1, min(quality, 100))
         self.fps = fps
         self._frame = np.zeros((320, 240, 1), dtype=np.uint8)
-        self._lock = asyncio.Lock()
-
-    def set_frame(self, frame: np.ndarray) -> None:
-        self._frame = frame
 
     def get_bandwidth(self) -> float:
         global byte_frame_size
@@ -36,9 +35,17 @@ class Stream:
                 byte_frame_size.pop(0)
         return sum(byte_frame_size)
 
+    def stop_capturing(self):
+        self.cap.release()
+        self._capturing = False
+        return
+
     async def _get_frame(self) -> np.ndarray:
-        async with self._lock:
-            return self._frame
+        if not self._capturing:
+            self.cap = cv2.VideoCapture(self.src)
+            self._capturing = True
+        _, self._frame = self.cap.read()
+        return self._frame
 
 
 class _StreamHandler:
@@ -83,6 +90,7 @@ class _StreamHandler:
                     break
             await response.write(b"\r\n")
 
+        self._stream.stop_capturing()
 
 class MjpegServer:
     def __init__(self, host: str or list = "localhost", port: int = 8080) -> None:

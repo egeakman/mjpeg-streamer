@@ -1,44 +1,31 @@
-# mjpeg-streamer
+# on demand mjpeg-streamer
+
+This is a fork of the [original mjpeg-streamer](https://github.com/egeakman/mjpeg-streamer) implementing On Demand feature. This version works similarly as the original with the main advantage that the stream from the video input is on only if there is a connected client. 
+The reason for this change relies in the need to use webcam web streams in project with limited cpu performance or battery life that don't need to be wasted letting the camera record if no client is connected.
 
 ## Overview
 
 The mjpeg-streamer package provides a simple, flexible and efficient way to stream MJPEG video from OpenCV-compatible sources over HTTP. It provides a flexible interface that allows users to specify the video source and configure various parameters such as image size, quality, and FPS.
-
-## Installation
-
-You can install the package via pip:
-
-```bash
-pip install mjpeg-streamer
-```
 
 ## Usage
 
 Here's a simple example that shows how to use the MJPEG Server package to stream video from a webcam:
 
 ```python
-import cv2
-from mjpeg_streamer import MjpegServer, Stream
+import od-mjpeg_streamer
 
-cap = cv2.VideoCapture(0)
+capture_device = 0
 
-stream = Stream("my_camera", size=(640, 480), quality=50, fps=30)
+stream = Stream("my_camera", capture_device, size=(640, 480), quality=50, fps=30)
 
 server = MjpegServer("localhost", 8080)
 server.add_stream(stream)
 server.start()
 
 while True:
-    _, frame = cap.read()
-    cv2.imshow(stream.name, frame)
-    if cv2.waitKey(1) == ord("q"):
-        break
-
-    stream.set_frame(frame)
+    pass
 
 server.stop()
-cap.release()
-cv2.destroyAllWindows()
 ```
 
 This example starts the MJPEG server on localhost:8080 and streams video from the webcam with the index of ``0``. The video is resized to 640x480 pixels, compressed with JPEG quality of 50, and streamed at 30 FPS.
@@ -55,10 +42,10 @@ A class that represents a single video stream. A stream consists of a sequence o
 ***Constructor:***
 
 ```python
-Stream(name: str, size: Optional[Tuple[int, int]] = None, quality: int = 50, fps: int = 24)
+Stream(name: str, cap: int | str, size: Optional[Tuple[int, int]] = None, quality: int = 50, fps: int = 24)
 ```
 
-Creates a new Stream instance with the given unique name, image size, JPEG quality (1-100), and FPS.
+Creates a new Stream instance with the given unique name, capture device, image size, JPEG quality (1-100), and FPS.
 
 ***Methods:***
 

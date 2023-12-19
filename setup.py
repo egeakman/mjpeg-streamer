@@ -1,21 +1,21 @@
 from setuptools import find_packages, setup
 
-__version__ = "2023.10.14"
+__version__ = "2023.12.19"
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="mjpeg-streamer",
-    author="Ege Akman",
-    author_email="me@egeakman.dev",
-    url="https://github.com/egeakman/mjpeg-streamer",
+    name="od-mjpeg-streamer",
+    author="Lapo Ciampi",
+    author_email="84043476+lapociampi@users.noreply.github.com ",
+    url="https://github.com/lapociampi/od-mjpeg-streamer",
     description="Simple MJPEG streamer for Python",
     long_description=long_description,
     long_description_content_type="text/markdown",
     version=__version__,
     license="AGPLv3",
-    download_url=f"https://github.com/egeakman/mjpeg-streamer/archive/{__version__}.tar.gz",
+    download_url=f"https://github.com/lapociampi/od-mjpeg-streamer/archive/{__version__}.tar.gz",
     packages=find_packages(where=".", exclude=["tests"]),
     python_requires=">=3.6",
     install_requires=[
@@ -37,6 +37,7 @@ setup(
         "streamer",
         "video",
         "webcam",
+        "ondemand"
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -62,7 +63,7 @@ setup(
         "Operating System :: MacOS :: MacOS X",
     ],
     project_urls={
-        "Homepage": "https://github.com/egeakman/mjpeg-streamer",
-        "Issues": "https://github.com/egeakman/mjpeg-streamer/issues",
+        "Homepage": "https://github.com/lapociampi/od-mjpeg-streamer",
+        "Issues": "https://github.com/lapociampi/od-mjpeg-streamer/issues",
     },
 )
