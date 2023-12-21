@@ -12,7 +12,7 @@ The mjpeg-streamer package provides a simple, flexible and efficient way to stre
 Here's a simple example that shows how to use the MJPEG Server package to stream video from a webcam:
 
 ```python
-import od-mjpeg_streamer
+import od_mjpeg_streamer
 
 capture_device = 0
 
