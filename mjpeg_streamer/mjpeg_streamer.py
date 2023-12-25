@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import sys
 import threading
-from typing import List, Optional, Tuple
+from typing import Optional, Union
 
 import aiohttp
 import cv2
@@ -15,7 +17,7 @@ class Stream:
     def __init__(
         self,
         name: str,
-        size: Optional[Tuple[int, int]] = None,
+        size: Optional[tuple[int, int]] = None,
         quality: int = 50,
         fps: int = 24,
     ) -> None:
@@ -36,7 +38,7 @@ class Stream:
                 byte_frame_size.pop(0)
         return sum(byte_frame_size)
 
-    async def _get_frame(self) -> np.ndarray:
+    async def get_frame(self) -> np.ndarray:
         async with self._lock:
             return self._frame
 
@@ -60,7 +62,7 @@ class _StreamHandler:
 
         while True:
             await asyncio.sleep(1 / self._stream.fps)
-            frame = await self._stream._get_frame()
+            frame = await self._stream.get_frame()
             frame = cv2.resize(
                 frame, self._stream.size or (frame.shape[1], frame.shape[0])
             )
@@ -79,13 +81,12 @@ class _StreamHandler:
                 try:
                     await mpwriter.write(response, close_boundary=False)
                 except ConnectionResetError:
-                    print("Client connection closed")
-                    break
+                    return web.Response(status=499, text="Client closed the connection")
             await response.write(b"\r\n")
 
 
 class MjpegServer:
-    def __init__(self, host: str or list = "localhost", port: int = 8080) -> None:
+    def __init__(self, host: Union[str, int] = "localhost", port: int = 8080) -> None:
         if isinstance(host, str) and host != "0.0.0.0":
             self._host = [host]
         elif isinstance(host, list):
@@ -106,7 +107,7 @@ class MjpegServer:
         self._port = port
         self._app = web.Application()
         self._app.is_running = False
-        self._cap_routes: List[str,] = []
+        self._cap_routes: list[str,] = []
 
     def is_running(self) -> bool:
         return self._app.is_running
@@ -139,23 +140,22 @@ class MjpegServer:
         loop.run_forever()
 
     def start(self) -> None:
-        if self.is_running():
-            print("Server is already running")
-            return
+        if not self.is_running():
+            thread = threading.Thread(target=self.__start_func, daemon=True)
+            thread.start()
+            self._app.is_running = True
+        else:
+            print("\nServer is already running\n")
 
-        print("Available streams:")
+        print("\nAvailable streams:\n")
         for addr in self._host:
             for route in self._cap_routes:  # route has a leading slash
-                print(f"http://{addr}:{str(self._port)}{route}")
+                print(f"http://{addr}:{self._port!s}{route}")
             print("--------------------------------")
-        thread = threading.Thread(target=self.__start_func, daemon=True)
-        thread.start()
-        self._app.is_running = True
+        print("\nPress Ctrl+C to stop the server\n")
 
     def stop(self) -> None:
         if self.is_running():
             self._app.is_running = False
-            raise GracefulExit()
-        else:
-            print("Server is not running")
-            return
+            raise GracefulExit
+        print("\nServer is not running\n")
