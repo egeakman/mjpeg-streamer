@@ -1,8 +1,10 @@
 # mjpeg-streamer
 
+
 ## Overview
 
 The mjpeg-streamer package provides a simple, flexible and efficient way to stream MJPEG video from OpenCV-compatible sources over HTTP. It provides a flexible interface that allows users to specify the video source and configure various parameters such as image size, quality, and FPS.
+
 
 ## Installation
 
@@ -11,6 +13,15 @@ You can install the package via pip:
 ```bash
 pip install mjpeg-streamer
 ```
+
+I would really recommend using `--prefer-binary`, especially with older versions of Python (e.g. 3.6). This will install the pre-compiled binary wheel instead of building from source, which is much faster and less error-prone.
+
+```bash
+pip install mjpeg-streamer --prefer-binary
+```
+
+*Latest versions of dependencies (e.g. Numpy) don't always ship with pre-compiled wheels for older versions of Python, so this option installs the latest compatible version instead, even though it might be a bit older.*
+
 
 ## Usage
 
@@ -46,6 +57,7 @@ This example starts the MJPEG server on localhost:8080 and streams video from th
 To view the video stream, you can open a web browser and navigate to http://localhost:8080/my_camera.
 
 Don't forget to check out the [tests](tests) directory for more examples.
+
 
 ## Class Reference
 
@@ -131,9 +143,11 @@ Creates a new MjpegServer instance with the given host and port.
 
     Stops the server.
 
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request.
+
 
 ## License
 
