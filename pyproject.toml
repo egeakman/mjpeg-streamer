@@ -71,6 +71,7 @@ path = "mjpeg_streamer/__init__.py"
 
 [tool.ruff]
 exclude = ["examples"]
+fix = false
 ignore = [
     "TID252", # Relative imports are banned | __init__.py
     "INP001", # ... is part of an implicit namespace package
