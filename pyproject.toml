@@ -51,10 +51,17 @@ dynamic = [
   "version",
 ]
 dependencies = [
-  "aiohttp",
+  'aiohttp==3.8.6; python_version >= "3.6" and python_version <= "3.7"',
+  'aiohttp==3.9.1; python_version == "3.8"',
+  'aiohttp; python_version >= "3.9"',
   "netifaces",
-  "numpy",
-  "opencv-python",
+  'numpy==1.19.5; python_version == "3.6"',
+  'numpy==1.21.6; python_version == "3.7"',
+  'numpy==1.24.4; python_version == "3.8"',
+  'numpy; python_version >= "3.9"',
+  'opencv-python==4.6.0.66; python_version == "3.6"',
+  'opencv-python==4.8.1.78; python_version >= "3.7" and python_version <= "3.8"',
+  'opencv-python; python_version >= "3.9"',
 ]
 [project.urls]
 Homepage = "https://github.com/egeakman/mjpeg-streamer"
