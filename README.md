@@ -139,4 +139,4 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
 
-TL;DR: You can use, modify, and distribute this software for free or for profit, but you must make the source code available to your users and include a copy of the license in your project. This license should mention the original author and link a to this repository.
+***TL;DR: You can use, modify, and distribute this software for free or for profit, but you must make the source code available to your users and include a copy of this license in your project. This license should also mention the original author and a link to this repository.***
