@@ -1,0 +1,88 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [
+  "hatchling",
+]
+
+[project]
+name = "mjpeg-streamer"
+description = "Simple, flexible and efficient MJPEG video streamer for Python"
+readme = "README.md"
+keywords = [
+  "aiohttp",
+  "asyncio",
+  "computer-vision",
+  "MJPEG",
+  "multi-camera",
+  "OpenCV",
+  "server",
+  "streamer",
+  "streaming",
+  "video",
+  "webcam",
+]
+license = {text = "AGPLv3"}
+authors = [{name = "Ege Akman", email = "me@egeakman.dev"}]
+requires-python = ">=3.6"
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Web Environment",
+  "Framework :: aiohttp",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Security",
+]
+dynamic = [
+  "version",
+]
+dependencies = [
+  "aiohttp",
+  "netifaces",
+  "numpy",
+  "opencv-python",
+]
+[project.urls]
+Homepage = "https://github.com/egeakman/mjpeg-streamer"
+Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
+Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
+
+[tool.hatch.build]
+packages = ["mjpeg_streamer"]
+exclude = ["examples"]
+isolated = true
+
+[tool.hatch.version]
+path = "mjpeg_streamer/__init__.py"
+
+[tool.ruff]
+exclude = ["examples"]
+ignore = [
+    "TID252", # Relative imports are banned | __init__.py
+    "INP001", # ... is part of an implicit namespace package
+    "T201", # `print` found | TODO: Migrate to logging
+    "S104", # Possible binding to all interfaces | False positive
+    "EM101", # Exception must not use a string literal
+    "EM102", # Exception must not use an f-string literal
+    "TRY003", # Avoid specifying long messages outside the exception class
+    "UP007", # Use `X | Y` for type annotations | Have to use `typing.Union` for Python 3.6 compatibility
+]
+
+[tool.isort]
+profile = "black"
+known_first_party = "mjpeg_streamer"
+skip = ["examples"]

@@ -50,7 +50,7 @@ Don't forget to check out the [tests](tests) directory for more examples.
 ## Class Reference
 
 ### *Stream*
-A class that represents a single video stream. A stream consists of a sequence of frames that can be set and retrieved using the set_frame and _get_frame methods.
+A class that represents a single video stream. A stream consists of a sequence of frames that can be set and retrieved using the set_frame and get_frame methods.
 
 ***Constructor:***
 
@@ -82,10 +82,10 @@ Creates a new Stream instance with the given unique name, image size, JPEG quali
 
 <br>
 
-- *_get_frame* (private)
+- *get_frame*
 
     ```python
-    _get_frame()
+    get_frame()
     ```
     Returns the current frame as a Numpy array.
 
@@ -138,3 +138,5 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## License
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+TL;DR: You can use, modify, and distribute this software for free or for profit, but you must make the source code available to your users and include a copy of the license in your project. This license should mention the original author and link a to this repository.
