@@ -14,13 +14,13 @@ You can install the package via pip:
 pip install mjpeg-streamer
 ```
 
-I would really recommend using `--prefer-binary`, especially with older versions of Python (e.g. 3.6). This will install the pre-compiled binary wheel instead of building from source, which is much faster and less error-prone.
+I would really recommend using `--prefer-binary`, especially with older versions of Python (e.g. 3.6). This will install pre-compiled binaries instead of building from source, which is much faster and less error-prone.
 
 ```bash
 pip install mjpeg-streamer --prefer-binary
 ```
 
-*Latest versions of dependencies (e.g. Numpy) don't always ship with pre-compiled wheels for older versions of Python, so this option installs the latest compatible version instead, even though it might be a bit older.*
+*Latest versions of dependencies (e.g. Numpy) don't always ship with pre-compiled binaries for older versions of Python, so this option installs the latest compatible version instead, even though it might be a bit older.*
 
 
 ## Usage
