@@ -56,7 +56,7 @@ This example starts the MJPEG server on localhost:8080 and streams video from th
 
 To view the video stream, you can open a web browser and navigate to http://localhost:8080/my_camera.
 
-Don't forget to check out the [tests](tests) directory for more examples.
+Don't forget to check out the [examples](examples) directory for more examples.
 
 
 ## Class Reference
