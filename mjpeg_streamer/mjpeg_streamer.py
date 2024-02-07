@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from collections import deque
 from typing import Optional, Union
 
@@ -28,11 +29,17 @@ class Stream:
         self._frame = np.zeros((320, 240, 1), dtype=np.uint8)
         self._lock = asyncio.Lock()
         self._byte_frame_window = deque(maxlen=30)
+        self.bandwidth_last_modified_time = time.time()
 
     def set_frame(self, frame: np.ndarray) -> None:
         self._frame = frame
 
     def get_bandwidth(self) -> float:
+        if (
+            len(self._byte_frame_window) > 0
+            and time.time() - self.bandwidth_last_modified_time >= 1
+        ):
+            deque.clear(self._byte_frame_window)
         return sum(self._byte_frame_window)
 
     def __process_current_frame(self) -> np.ndarray:
@@ -45,6 +52,7 @@ class Stream:
         if not val:
             raise ValueError("Error encoding frame")
         self._byte_frame_window.append(len(frame.tobytes()))
+        self.bandwidth_last_modified_time = time.time()
         return frame
 
     async def get_frame(self) -> np.ndarray:
