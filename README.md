@@ -25,7 +25,9 @@ pip install mjpeg-streamer --prefer-binary
 
 ## Usage
 
-Here's a simple example that shows how to use the MJPEG Server package to stream video from a webcam:
+### Library
+
+Here's a simple example that shows how to use the *mjpeg_streamer* package to stream video from a webcam:
 
 ```python
 import cv2
@@ -56,7 +58,39 @@ This example starts the MJPEG server on localhost:8080 and streams video from th
 
 To view the video stream, you can open a web browser and navigate to http://localhost:8080/my_camera.
 
+To view the streams index, you can open a web browser and navigate to http://localhost:8080.
+
 Don't forget to check out the [examples](examples) directory for more examples.
+
+Check out the [class reference](#class-reference) for more details on the classes and methods provided by the package.
+
+### Command Line Interface
+
+The package also provides a simple command line interface that allows you to stream video from multiple sources using a single command. Here's an example that shows how to stream video from a webcam and a video file:
+
+```bash
+$ mjpeg-streamer -s 0 -s "video file.mp4" --prefix "ender 3 pro" --quality 75 --fps 24 --show-bandwidth
+
+Streams index: http://localhost:8080
+Available streams:
+
+http://localhost:8080/ender_3_pro_0
+http://localhost:8080/ender_3_pro_video_file_mp4
+--------------------------------
+
+
+Press Ctrl+C to stop the server
+
+ender_3_pro_video_file_mp4: 599.28 KB/s | ender_3_pro_0: 824.44 KB/s
+```
+
+This command starts the MJPEG server on localhost:8080 and streams video from the webcam with the index of ``0`` and the video file "video file.mp4". The streams are prefixed with "ender 3 pro" and compressed with JPEG quality of 75 and streamed at 24 FPS. The bandwidth of each stream is displayed in the console.
+
+To view the video streams, you can open a web browser and navigate to the URLs displayed in the console.
+
+Run ``mjpeg-streamer --help`` for more information on the available options.
+
+***Note that*** the command line interface is limited and doesn't provide the same level of flexibility as the library. It's recommended to use the library if you need to customize the video streams or integrate them into your own application.
 
 
 ## Class Reference
@@ -91,6 +125,7 @@ Creates a new Stream instance with the given unique name, image size, JPEG quali
     ```
 
     Returns the bandwidth of the stream in bytes per second.
+    *Tip: Divide the result by 1024 to get the bandwidth in kilobytes per second.*
 
 <br>
 
@@ -100,6 +135,16 @@ Creates a new Stream instance with the given unique name, image size, JPEG quali
     get_frame()
     ```
     Returns the current frame as a Numpy array.
+
+<br>
+
+- *get_frame_processed*
+
+    ```python
+    get_frame_processed()
+    ```
+
+    Returns the current frame as a Numpy array after processing it with the specified image size and JPEG quality.
 
 ### *MjpegServer*
 
