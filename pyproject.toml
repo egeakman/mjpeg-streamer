@@ -67,6 +67,8 @@ dependencies = [
 Homepage = "https://github.com/egeakman/mjpeg-streamer"
 Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
 Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
+[project.scripts]
+mjpeg-streamer = "mjpeg_streamer.cli:main"
 
 [tool.hatch.build]
 packages = ["mjpeg_streamer"]
@@ -81,13 +83,13 @@ exclude = ["examples"]
 fix = false
 ignore = [
     "TID252", # Relative imports are banned | __init__.py
-    "INP001", # ... is part of an implicit namespace package
     "T201", # `print` found | TODO: Migrate to logging
     "S104", # Possible binding to all interfaces | False positive
     "EM101", # Exception must not use a string literal
     "EM102", # Exception must not use an f-string literal
     "TRY003", # Avoid specifying long messages outside the exception class
     "UP007", # Use `X | Y` for type annotations | Have to use `typing.Union` for Python 3.6 compatibility
+    "FBT001", # Boolean-typed positional argument in function definition
 ]
 
 [tool.isort]

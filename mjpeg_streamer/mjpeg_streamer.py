@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import threading
+from collections import deque
 from typing import Optional, Union
 
 import aiohttp
@@ -19,7 +19,7 @@ class Stream:
         name: str,
         size: Optional[tuple[int, int]] = None,
         quality: int = 50,
-        fps: int = 24,
+        fps: int = 30,
     ) -> None:
         self.name = name.lower().casefold().replace(" ", "_")
         self.size = size
@@ -27,30 +27,40 @@ class Stream:
         self.fps = fps
         self._frame = np.zeros((320, 240, 1), dtype=np.uint8)
         self._lock = asyncio.Lock()
+        self._byte_frame_window = deque(maxlen=30)
 
     def set_frame(self, frame: np.ndarray) -> None:
         self._frame = frame
 
     def get_bandwidth(self) -> float:
-        global byte_frame_size
-        if len(byte_frame_size) > self.fps:
-            for _ in range(len(byte_frame_size) - self.fps):
-                byte_frame_size.pop(0)
-        return sum(byte_frame_size)
+        return sum(self._byte_frame_window)
+
+    def __process_current_frame(self) -> np.ndarray:
+        frame = cv2.resize(
+            self._frame, self.size or (self._frame.shape[1], self._frame.shape[0])
+        )
+        val, frame = cv2.imencode(
+            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.quality]
+        )
+        if not val:
+            raise ValueError("Error encoding frame")
+        self._byte_frame_window.append(len(frame.tobytes()))
+        return frame
 
     async def get_frame(self) -> np.ndarray:
         async with self._lock:
             return self._frame
 
+    async def get_frame_processed(self) -> np.ndarray:
+        async with self._lock:
+            return self.__process_current_frame()
+
 
 class _StreamHandler:
     def __init__(self, stream: Stream) -> None:
-        global byte_frame_size
         self._stream = stream
-        byte_frame_size = []
 
     async def __call__(self, request: web.Request) -> web.StreamResponse:
-        global byte_frame_size
         response = web.StreamResponse(
             status=200,
             reason="OK",
@@ -62,20 +72,7 @@ class _StreamHandler:
 
         while True:
             await asyncio.sleep(1 / self._stream.fps)
-            frame = await self._stream.get_frame()
-            frame = cv2.resize(
-                frame, self._stream.size or (frame.shape[1], frame.shape[0])
-            )
-            val, frame = cv2.imencode(
-                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self._stream.quality]
-            )
-
-            if not val:
-                print("Error while encoding frame")
-                break
-
-            byte_frame_size.append(sys.getsizeof(frame.tobytes()))
-
+            frame = await self._stream.get_frame_processed()
             with MultipartWriter("image/jpeg", boundary="image-boundary") as mpwriter:
                 mpwriter.append(frame.tobytes(), {"Content-Type": "image/jpeg"})
                 try:
@@ -113,11 +110,9 @@ class MjpegServer:
         return self._app.is_running
 
     async def __root_handler(self, _) -> web.Response:
-        text = "<h2>Available streams:</h2>\n\n"
+        text = "<h2>Available streams:</h2>"
         for route in self._cap_routes:
-            text += (
-                f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n\n"
-            )
+            text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
         return aiohttp.web.Response(text=text, content_type="text/html")
 
     def add_stream(self, stream: Stream) -> None:
@@ -147,15 +142,17 @@ class MjpegServer:
         else:
             print("\nServer is already running\n")
 
-        print("\nAvailable streams:\n")
         for addr in self._host:
+            print(f"\nStreams index: http://{addr}:{self._port!s}")
+            print("Available streams:\n")
             for route in self._cap_routes:  # route has a leading slash
                 print(f"http://{addr}:{self._port!s}{route}")
-            print("--------------------------------")
+            print("--------------------------------\n")
         print("\nPress Ctrl+C to stop the server\n")
 
     def stop(self) -> None:
         if self.is_running():
             self._app.is_running = False
+            print("\nStopping...\n")
             raise GracefulExit
         print("\nServer is not running\n")

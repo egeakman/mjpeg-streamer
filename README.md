@@ -67,7 +67,7 @@ A class that represents a single video stream. A stream consists of a sequence o
 ***Constructor:***
 
 ```python
-Stream(name: str, size: Optional[Tuple[int, int]] = None, quality: int = 50, fps: int = 24)
+Stream(name: str, size: Optional[Tuple[int, int]] = None, quality: int = 50, fps: int = 30)
 ```
 
 Creates a new Stream instance with the given unique name, image size, JPEG quality (1-100), and FPS.

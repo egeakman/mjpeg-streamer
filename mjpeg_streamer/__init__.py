@@ -1,4 +1,4 @@
 from .mjpeg_streamer import MjpegServer, Stream
 
 __all__ = ["MjpegServer", "Stream"]
-__version__ = "2023.12.25.post0"
+__version__ = "2024.2.7"

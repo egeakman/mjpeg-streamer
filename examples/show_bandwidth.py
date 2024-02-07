@@ -18,7 +18,7 @@ while True:
     stream.set_frame(frame)
 
     # Print the bandwidth in KB/s
-    print(round(stream.get_bandwidth() / 1024, 2), "KB/s")
+    print(round(stream.get_bandwidth() / 1024, 2), "KB/s", end="\r")
 
 server.stop()
 cap.release()
