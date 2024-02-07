@@ -54,7 +54,7 @@ cap.release()
 cv2.destroyAllWindows()
 ```
 
-This example starts the MJPEG server on localhost:8080 and streams video from the webcam with the index of ``0``. The video is resized to 640x480 pixels, compressed with JPEG quality of 50, and streamed at 30 FPS.
+This example starts the MJPEG server on ``localhost:8080`` and streams video from the webcam with the index of ``0``. The video is resized to 640x480 pixels, compressed with JPEG quality of 50, and streamed at 30 FPS.
 
 To view the video stream, you can open a web browser and navigate to http://localhost:8080/my_camera.
 
@@ -84,7 +84,7 @@ Press Ctrl+C to stop the server
 ender_3_pro_video_file_mp4: 599.28 KB/s | ender_3_pro_0: 824.44 KB/s
 ```
 
-This command starts the MJPEG server on localhost:8080 and streams video from the webcam with the index of ``0`` and the video file "video file.mp4". The streams are prefixed with "ender 3 pro" and compressed with JPEG quality of 75 and streamed at 24 FPS. The bandwidth of each stream is displayed in the console.
+This command starts the MJPEG server on ``localhost:8080`` and streams video from the webcam with the index of ``0`` and the video file ``video file.mp4``. The streams are prefixed with ``ender 3 pro`` and compressed with JPEG quality of 75 and streamed at 24 FPS. The bandwidth of each stream is displayed in the console.
 
 To view the video streams, you can open a web browser and navigate to the URLs displayed in the console.
 
@@ -198,4 +198,4 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
 
-***TL;DR: You can use, modify, and distribute this software for free or for profit, but you must make the source code available to your users and include a copy of this license in your project. This license should also mention the original author and a link to this repository.***
+***TL;DR: You can use, modify, and distribute this software for free or for profit, but you must make the source code available to your users and include a copy of [this license](LICENSE) in your project. Your modified work's license should also mention the original author and a link to this repository.***
