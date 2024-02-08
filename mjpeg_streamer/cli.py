@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     args.prefix = re.sub("[^0-9a-zA-Z]+", "_", args.prefix)
     args.source: List[Union[int, str],] = [[0]] if args.source is None else args.source
     args.source = [item for sublist in args.source for item in sublist]
+    args.source = list(set(args.source))
     return args
 
 
