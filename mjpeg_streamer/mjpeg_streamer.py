@@ -83,7 +83,7 @@ class _StreamHandler:
                 mpwriter.append(frame.tobytes(), {"Content-Type": "image/jpeg"})
                 try:
                     await mpwriter.write(response, close_boundary=False)
-                except ConnectionResetError:
+                except (ConnectionResetError, ConnectionAbortedError):
                     return web.Response(status=499, text="Client closed the connection")
             await response.write(b"\r\n")
 
