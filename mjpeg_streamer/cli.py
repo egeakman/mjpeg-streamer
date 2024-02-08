@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import argparse
 import re
 import threading
-from typing import Union
+from typing import List, Tuple, Union
 
 import cv2
 
@@ -36,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     )
     args: argparse.Namespace = parser.parse_args()
     args.prefix = re.sub("[^0-9a-zA-Z]+", "_", args.prefix)
-    args.source: list[Union[int, str],] = [[0]] if args.source is None else args.source
+    args.source: List[Union[int, str],] = [[0]] if args.source is None else args.source
     args.source = [item for sublist in args.source for item in sublist]
     return args
 
@@ -61,10 +59,10 @@ def run(
 
 def main() -> None:
     args = parse_args()
-    size: tuple[int, int] = (args.width, args.height)
+    size: Tuple[int, int] = (args.width, args.height)
     server = MjpegServer(args.host, args.port)
-    threads: list[threading.Thread,] = []
-    stop_events: list[threading.Event,] = []
+    threads: List[threading.Thread,] = []
+    stop_events: List[threading.Event,] = []
 
     if args.show_bandwidth:
         global bandwidth

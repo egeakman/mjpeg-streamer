@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 import asyncio
 import threading
 import time
 from collections import deque
-from typing import Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import aiohttp
 import cv2
@@ -18,7 +16,7 @@ class Stream:
     def __init__(
         self,
         name: str,
-        size: Optional[tuple[int, int]] = None,
+        size: Optional[Tuple[int, int]] = None,
         quality: int = 50,
         fps: int = 30,
     ) -> None:
@@ -112,7 +110,7 @@ class MjpegServer:
         self._port = port
         self._app = web.Application()
         self._app.is_running = False
-        self._cap_routes: list[str,] = []
+        self._cap_routes: List[str,] = []
 
     def is_running(self) -> bool:
         return self._app.is_running
