@@ -26,18 +26,30 @@ class Stream:
         self.fps = fps
         self._frame = np.zeros((320, 240, 1), dtype=np.uint8)
         self._lock = asyncio.Lock()
-        self._byte_frame_window = deque(maxlen=30)
+        self._byte_frame_window = deque(maxlen=fps)
         self._bandwidth_last_modified_time = time.time()
+        self._background_task: Optional[asyncio.Task] = None
+
+    async def __ensure_background_task(self) -> None:
+        if self._background_task is None or self._background_task.done():
+            self._background_task = asyncio.create_task(self.__clear_deque())
+
+    async def __clear_deque(self) -> None:
+        while True:
+            await asyncio.sleep(1 / self.fps)
+            if (
+                len(self._byte_frame_window) > 0
+                and time.time() - self._bandwidth_last_modified_time >= 1
+            ):
+                deque.clear(self._byte_frame_window)
+
+    def has_demand(self) -> bool:
+        return len(self._byte_frame_window) > 0
 
     def set_frame(self, frame: np.ndarray) -> None:
         self._frame = frame
 
     def get_bandwidth(self) -> float:
-        if (
-            len(self._byte_frame_window) > 0
-            and time.time() - self._bandwidth_last_modified_time >= 1
-        ):
-            deque.clear(self._byte_frame_window)
         return sum(self._byte_frame_window)
 
     def __process_current_frame(self) -> np.ndarray:
@@ -54,10 +66,13 @@ class Stream:
         return frame
 
     async def get_frame(self) -> np.ndarray:
+        # A little hacky, if you have a better way, please let me know
+        await self.__ensure_background_task()
         async with self._lock:
             return self._frame
 
     async def get_frame_processed(self) -> np.ndarray:
+        await self.__ensure_background_task()  # Ditto
         async with self._lock:
             return self.__process_current_frame()
 
