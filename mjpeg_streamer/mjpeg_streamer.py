@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import time
+import uuid
 from collections import deque
 from typing import List, Optional, Tuple, Union
 
@@ -30,7 +31,16 @@ class StreamBase:
             self._byte_frame_window: deque = deque(maxlen=fps)
             self._bandwidth_last_modified_time: float = time.time()
             self._deque_background_task: Optional[asyncio.Task] = None
+            self._active_viewers: set = set()
             self.settings()
+
+    async def _add_viewer(self):
+        viewer_token = str(uuid.uuid4())
+        self._active_viewers.add(viewer_token)
+        return viewer_token
+
+    async def _remove_viewer(self, viewer_token):
+        self._active_viewers.discard(viewer_token)
 
     async def __clear_deque(self) -> None:
         while True:
@@ -69,7 +79,7 @@ class StreamBase:
             print(f"{key}: {value}")
 
     def has_demand(self) -> bool:
-        return len(self._byte_frame_window) > 0
+        return len(self._active_viewers) > 0
 
     def get_bandwidth(self) -> float:
         return sum(self._byte_frame_window)
@@ -94,8 +104,8 @@ class StreamBase:
         self._frame = frame
 
     # Not very useful, but it's here for the sake of completeness
-    # def get_frame(self) -> np.ndarray:
-    #     return self._frame
+    def get_frame(self) -> np.ndarray:
+        return self._frame
 
 
 class Stream(StreamBase):
@@ -121,14 +131,13 @@ class Stream(StreamBase):
             )
             if not val:
                 raise ValueError("Error encoding frame")
-            self._is_encoded = True
+            self._byte_frame_window.append(len(frame.tobytes()))
+            self._bandwidth_last_modified_time = time.time()
             return frame
         return self._frame
 
     async def _get_frame(self) -> np.ndarray:
         await self._ensure_background_tasks()
-        self._byte_frame_window.append(len(self._frame.tobytes()))
-        self._bandwidth_last_modified_time = time.time()
         async with self._lock:
             return await self.__process_current_frame()
 
@@ -147,8 +156,8 @@ class Stream(StreamBase):
             self._is_encoded = True
         self._frame = frame
 
-    # def get_frame(self) -> np.ndarray:
-    #     return super().get_frame()
+    def get_frame(self) -> np.ndarray:
+        return super().get_frame()
 
 
 class CustomStream(StreamBase):
@@ -169,17 +178,17 @@ class ManagedStream(StreamBase):
         size: Optional[Tuple[int, int]] = None,
         quality: int = 50,
         source: Union[int, str] = 0,
-        mode: str = "regular",
-        poll_delay: Optional[float] = None,
+        mode: str = "fast-on-demand",
+        poll_delay_ms: Optional[float] = None,
     ) -> None:
         self.mode = mode
-        self._available_modes: List[str,] = ["regular", "od", "fast-od"]
+        self._available_modes: List[str,] = ["fast-on-demand", "full-on-demand"]
         if self.mode not in self._available_modes:
             raise ValueError(f"Invalid mode. Available modes: {self._available_modes}")
         self.size = size
         self.quality = max(1, min(quality, 100))
         self.source = source
-        self.poll_delay = poll_delay or fps
+        self.poll_delay_ms = poll_delay_ms / 1000 or 1 / fps
         self._cap_is_open = False
         self._cap: Optional[cv2.VideoCapture] = None
         self._cap_background_task: Optional[asyncio.Task] = None
@@ -188,27 +197,28 @@ class ManagedStream(StreamBase):
     async def _ensure_background_tasks(self) -> None:
         await super()._ensure_background_tasks()
         if self._cap_background_task is None or self._cap_background_task.done():
-            print("Creating a new background task")
-            await self.__open_cap()
             self._cap_background_task = asyncio.create_task(self.__manage_cap_state())
 
     async def __manage_cap_state(self) -> None:
         while True:
-            await asyncio.sleep(self.poll_delay)
-            if self.mode == "od":
+            await asyncio.sleep(self.poll_delay_ms)
+            if self.mode == "full-on-demand":
                 if self.has_demand() and not self._cap_is_open:
-                    await self.__open_cap()
+                    self.__open_cap()
                 elif not self.has_demand() and self._cap_is_open:
-                    await self.__close_cap()
+                    self.__close_cap()
+            else:
+                if not self._cap_is_open:
+                    self.__open_cap()
 
-    async def __open_cap(self) -> None:
+    def __open_cap(self) -> None:
         if not self._cap_is_open:
             self._cap = cv2.VideoCapture(self.source)
             if not self._cap.isOpened():
                 raise ValueError("Cannot open the capture device")
             self._cap_is_open = True
 
-    async def __close_cap(self) -> None:
+    def __close_cap(self) -> None:
         if self._cap_is_open:
             self._cap.release()
             self._cap_is_open = False
@@ -218,17 +228,14 @@ class ManagedStream(StreamBase):
             val, frame = self._cap.read()
             if not val:
                 raise ValueError("Error reading frame")
-            return frame
+            self._frame = frame
         else:
-            print("Capture device is not open")
             self.__open_cap()
 
     async def __process_current_frame(self) -> np.ndarray:
-        if self.mode in ["od", "fast-od"] and not self.has_demand():
-            print("No demand, skipping frame")
+        if not self.has_demand():
             return self._frame
-        # print("Processing frame")
-        frame = await self.__read_frame()
+        await self.__read_frame()
         frame = cv2.resize(
             self._frame, self.size or (self._frame.shape[1], self._frame.shape[0])
         )
@@ -237,14 +244,13 @@ class ManagedStream(StreamBase):
         )
         if not val:
             raise ValueError("Error encoding frame")
+        self._byte_frame_window.append(len(frame.tobytes()))
+        self._bandwidth_last_modified_time = time.time()
         return frame
 
     async def _get_frame(self) -> np.ndarray:
         await self._ensure_background_tasks()
-        self._byte_frame_window.append(len(self._frame.tobytes()))
-        self._bandwidth_last_modified_time = time.time()
         async with self._lock:
-            # print("Returning frame")
             return await self.__process_current_frame()
 
     def set_size(self, size: Tuple[int, int]) -> None:
@@ -268,8 +274,8 @@ class ManagedStream(StreamBase):
         self.__close_cap()
         self.__open_cap()
 
-    def set_poll_delay(self, poll_delay: float) -> None:
-        self.poll_delay = poll_delay
+    def set_poll_delay_ms(self, poll_delay_ms: float) -> None:
+        self.poll_delay_ms = poll_delay_ms / 1000
 
 
 class _StreamHandler:
@@ -277,6 +283,7 @@ class _StreamHandler:
         self._stream = stream
 
     async def __call__(self, request: web.Request) -> web.StreamResponse:
+        viewer_token = request.cookies.get("viewer_token")
         response = web.StreamResponse(
             status=200,
             reason="OK",
@@ -285,17 +292,28 @@ class _StreamHandler:
             },
         )
         await response.prepare(request)
-
-        while True:
-            await asyncio.sleep(1 / self._stream.fps)
-            frame = await self._stream._get_frame()
-            with MultipartWriter("image/jpeg", boundary="image-boundary") as mpwriter:
-                mpwriter.append(frame.tobytes(), {"Content-Type": "image/jpeg"})
-                try:
-                    await mpwriter.write(response, close_boundary=False)
-                except (ConnectionResetError, ConnectionAbortedError):
-                    return web.Response(status=499, text="Client closed the connection")
-            await response.write(b"\r\n")
+        if not viewer_token:
+            viewer_token = await self._stream._add_viewer()
+            response.set_cookie("viewer_token", viewer_token)
+        else:
+            if viewer_token not in self._stream._active_viewers:
+                await self._stream._add_viewer(viewer_token)
+        try:
+            while True:
+                await asyncio.sleep(1 / self._stream.fps)
+                frame = await self._stream._get_frame()
+                with MultipartWriter(
+                    "image/jpeg", boundary="image-boundary"
+                ) as mpwriter:
+                    mpwriter.append(frame.tobytes(), {"Content-Type": "image/jpeg"})
+                    try:
+                        await mpwriter.write(response, close_boundary=False)
+                    except (ConnectionResetError, ConnectionAbortedError):
+                        break
+                await response.write(b"\r\n")
+        finally:
+            await self._stream._remove_viewer(viewer_token)
+        return response
 
 
 class MjpegServer:
