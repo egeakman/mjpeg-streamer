@@ -3,7 +3,7 @@ import threading
 import time
 import uuid
 from collections import deque
-from typing import List, Optional, Tuple, Union
+from typing import Deque, List, Optional, Set, Tuple, Union
 
 import aiohttp
 import cv2
@@ -11,6 +11,7 @@ import netifaces
 import numpy as np
 from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
+from multidict import MultiDict
 
 
 class StreamBase:
@@ -23,23 +24,21 @@ class StreamBase:
             raise TypeError(
                 "StreamBase is an abstract class and cannot be instantiated"
             )
-        else:
-            self.name = name.lower().casefold().replace(" ", "_")
-            self.fps = fps
-            self._frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
-            self._lock: asyncio.Lock = asyncio.Lock()
-            self._byte_frame_window: deque = deque(maxlen=fps)
-            self._bandwidth_last_modified_time: float = time.time()
-            self._deque_background_task: Optional[asyncio.Task] = None
-            self._active_viewers: set = set()
-            self.settings()
+        self.name = name.lower().casefold().replace(" ", "_")
+        self.fps = fps
+        self._frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
+        self._lock: asyncio.Lock = asyncio.Lock()
+        self._byte_frame_window: Deque[int,] = deque(maxlen=fps)
+        self._bandwidth_last_modified_time: float = time.time()
+        self._deque_background_task: Optional[asyncio.Task] = None
+        self._active_viewers: Set[str,] = set()
 
-    async def _add_viewer(self):
-        viewer_token = str(uuid.uuid4())
+    async def _add_viewer(self, viewer_token: Optional[str] = None) -> str:
+        viewer_token = viewer_token or str(uuid.uuid4())
         self._active_viewers.add(viewer_token)
         return viewer_token
 
-    async def _remove_viewer(self, viewer_token):
+    async def _remove_viewer(self, viewer_token: str) -> None:
         self._active_viewers.discard(viewer_token)
 
     async def __clear_deque(self) -> None:
@@ -49,7 +48,7 @@ class StreamBase:
                 len(self._byte_frame_window) > 0
                 and time.time() - self._bandwidth_last_modified_time >= 1
             ):
-                deque.clear(self._byte_frame_window)
+                self._byte_frame_window.clear()
 
     async def _ensure_background_tasks(self) -> None:
         if self._deque_background_task is None or self._deque_background_task.done():
@@ -65,14 +64,12 @@ class StreamBase:
                 and frame[-1] == 217
             ):
                 return "jpeg"
-            else:
-                return "one-dim-non-jpeg"
-        elif isinstance(frame, np.ndarray):
+            return "one-dim-non-jpeg"
+        if isinstance(frame, np.ndarray):
             return "multi-dim"
-        else:
-            return "unknown"
+        return "unknown"
 
-    def settings(self):
+    def settings(self) -> None:
         for key, value in self.__dict__.items():
             if key.startswith("_"):
                 continue
@@ -151,7 +148,8 @@ class Stream(StreamBase):
         self._is_encoded = False
         if self._check_encoding(frame) == "jpeg":
             print(
-                "The frame is already encoded, will not encode again. Consider using CustomStream if you want to handle the processing yourself."
+                "The frame is already encoded, will not encode again. \
+                    Consider using CustomStream if you want to handle the processing yourself."
             )
             self._is_encoded = True
         self._frame = frame
@@ -179,7 +177,7 @@ class ManagedStream(StreamBase):
         quality: int = 50,
         source: Union[int, str] = 0,
         mode: str = "fast-on-demand",
-        poll_delay_ms: Optional[float] = None,
+        poll_delay_ms: Optional[Union[float, int]] = None,
     ) -> None:
         self.mode = mode
         self._available_modes: List[str,] = ["fast-on-demand", "full-on-demand"]
@@ -188,9 +186,9 @@ class ManagedStream(StreamBase):
         self.size = size
         self.quality = max(1, min(quality, 100))
         self.source = source
-        self.poll_delay_ms = poll_delay_ms / 1000 or 1 / fps
-        self._cap_is_open = False
-        self._cap: Optional[cv2.VideoCapture] = None
+        self.poll_delay_ms = poll_delay_ms / 1000 if poll_delay_ms else 1 / fps
+        self._cap_is_open: bool = False
+        self._cap: cv2.VideoCapture = cv2.VideoCapture(self.source)
         self._cap_background_task: Optional[asyncio.Task] = None
         super().__init__(name, fps)
 
@@ -207,9 +205,8 @@ class ManagedStream(StreamBase):
                     self.__open_cap()
                 elif not self.has_demand() and self._cap_is_open:
                     self.__close_cap()
-            else:
-                if not self._cap_is_open:
-                    self.__open_cap()
+            elif not self._cap_is_open:
+                self.__open_cap()
 
     def __open_cap(self) -> None:
         if not self._cap_is_open:
@@ -223,7 +220,7 @@ class ManagedStream(StreamBase):
             self._cap.release()
             self._cap_is_open = False
 
-    async def __read_frame(self) -> np.ndarray:
+    async def __read_frame(self) -> None:
         if self._cap_is_open:
             val, frame = self._cap.read()
             if not val:
@@ -259,7 +256,7 @@ class ManagedStream(StreamBase):
     def set_quality(self, quality: int) -> None:
         self.quality = max(1, min(quality, 100))
 
-    def set_frame(self) -> None:
+    def set_frame(self, frame: np.ndarray) -> None:
         raise NotImplementedError(
             "This method is not available for ManagedStream, use Stream or CustomStream instead."
         )
@@ -295,9 +292,8 @@ class _StreamHandler:
         if not viewer_token:
             viewer_token = await self._stream._add_viewer()
             response.set_cookie("viewer_token", viewer_token)
-        else:
-            if viewer_token not in self._stream._active_viewers:
-                await self._stream._add_viewer(viewer_token)
+        elif viewer_token not in self._stream._active_viewers:
+            await self._stream._add_viewer(viewer_token)
         try:
             while True:
                 await asyncio.sleep(1 / self._stream.fps)
@@ -305,7 +301,10 @@ class _StreamHandler:
                 with MultipartWriter(
                     "image/jpeg", boundary="image-boundary"
                 ) as mpwriter:
-                    mpwriter.append(frame.tobytes(), {"Content-Type": "image/jpeg"})
+                    mpwriter.append(
+                        frame.tobytes(),
+                        MultiDict({"Content-Type": "image/jpeg"}),
+                    )
                     try:
                         await mpwriter.write(response, close_boundary=False)
                     except (ConnectionResetError, ConnectionAbortedError):
@@ -317,9 +316,13 @@ class _StreamHandler:
 
 
 class MjpegServer:
-    def __init__(self, host: Union[str, int] = "localhost", port: int = 8080) -> None:
+    def __init__(
+        self, host: Union[str, List[str,]] = "localhost", port: int = 8080
+    ) -> None:
         if isinstance(host, str) and host != "0.0.0.0":
-            self._host = [host]
+            self._host: List[str,] = [
+                host,
+            ]
         elif isinstance(host, list):
             if "0.0.0.0" in host:
                 host.remove("0.0.0.0")
@@ -328,7 +331,7 @@ class MjpegServer:
                     for iface in netifaces.interfaces()
                     if netifaces.AF_INET in netifaces.ifaddresses(iface)
                 ]
-            self._host = list(dict.fromkeys(host))
+            self._host = list(set(host))
         else:
             self._host = [
                 netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
@@ -336,12 +339,12 @@ class MjpegServer:
                 if netifaces.AF_INET in netifaces.ifaddresses(iface)
             ]
         self._port = port
-        self._app = web.Application()
-        self._app.is_running = False
+        self._app: web.Application = web.Application()
+        self._app_is_running: bool = False
         self._cap_routes: List[str,] = []
 
     def is_running(self) -> bool:
-        return self._app.is_running
+        return self._app_is_running
 
     async def __root_handler(self, _) -> web.Response:
         text = "<h2>Available streams:</h2>"
@@ -372,7 +375,7 @@ class MjpegServer:
         if not self.is_running():
             thread = threading.Thread(target=self.__start_func, daemon=True)
             thread.start()
-            self._app.is_running = True
+            self._app_is_running = True
         else:
             print("\nServer is already running\n")
 
@@ -386,7 +389,7 @@ class MjpegServer:
 
     def stop(self) -> None:
         if self.is_running():
-            self._app.is_running = False
+            self._app_is_running = False
             print("\nStopping...\n")
             raise GracefulExit
         print("\nServer is not running\n")
