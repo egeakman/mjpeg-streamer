@@ -1,3 +1,4 @@
 hatch
+mypy
 pre-commit
 ruff
