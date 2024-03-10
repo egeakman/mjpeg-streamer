@@ -8,4 +8,5 @@ build/
 .pytest_cache/
 .ruff_cache/
 test*.py
-!test-*.py
+!test_*.py
+test-perf/

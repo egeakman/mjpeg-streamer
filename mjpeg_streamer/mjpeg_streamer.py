@@ -88,16 +88,17 @@ class StreamBase:
     async def _get_frame(self) -> np.ndarray:
         # A little hacky, if you have a better way, please let me know
         await self._ensure_background_tasks()
+        # Checking here to avoid continous polling
+        if self._check_encoding(self._frame) != "jpeg":
+            raise ValueError(
+                "Input is not an encoded JPEG frame. Use OpenCV's imencode method to encode the frame to JPEG."
+            )
         self._byte_frame_window.append(len(self._frame.tobytes()))
         self._bandwidth_last_modified_time = time.time()
         async with self._lock:
             return self._frame
 
     def set_frame(self, frame: np.ndarray) -> None:
-        if self._check_encoding(frame) != "jpeg":
-            raise ValueError(
-                "Input is not an encoded JPEG frame. Use OpenCV's imencode method to encode the frame to JPEG."
-            )
         self._frame = frame
 
     # Not very useful, but it's here for the sake of completeness
