@@ -1,17 +1,11 @@
 import asyncio
-import threading
 import time
 import uuid
 from collections import deque
 from typing import Deque, List, Optional, Set, Tuple, Union
 
-import aiohttp
 import cv2
-import netifaces
 import numpy as np
-from aiohttp import MultipartWriter, web
-from aiohttp.web_runner import GracefulExit
-from multidict import MultiDict
 
 
 class StreamBase:
@@ -28,7 +22,7 @@ class StreamBase:
         self.fps = fps
         self._frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
         self._lock: asyncio.Lock = asyncio.Lock()
-        self._byte_frame_window: Deque[int,] = deque(maxlen=fps)
+        self._frame_buffer: Deque[int,] = deque(maxlen=fps)
         self._bandwidth_last_modified_time: float = time.time()
         self._deque_background_task: Optional[asyncio.Task] = None
         self._active_viewers: Set[str,] = set()
@@ -45,10 +39,10 @@ class StreamBase:
         while True:
             await asyncio.sleep(1 / self.fps)
             if (
-                len(self._byte_frame_window) > 0
+                len(self._frame_buffer) > 0
                 and time.time() - self._bandwidth_last_modified_time >= 1
             ):
-                self._byte_frame_window.clear()
+                self._frame_buffer.clear()
 
     async def _ensure_background_tasks(self) -> None:
         if self._deque_background_task is None or self._deque_background_task.done():
@@ -78,8 +72,11 @@ class StreamBase:
     def has_demand(self) -> bool:
         return len(self._active_viewers) > 0
 
+    def active_viewers(self) -> int:
+        return len(self._active_viewers)
+
     def get_bandwidth(self) -> float:
-        return sum(self._byte_frame_window)
+        return sum(self._frame_buffer)
 
     def set_fps(self, fps: int) -> None:
         self.fps = fps
@@ -93,7 +90,7 @@ class StreamBase:
             raise ValueError(
                 "Input is not an encoded JPEG frame. Use OpenCV's imencode method to encode the frame to JPEG."
             )
-        self._byte_frame_window.append(len(self._frame.tobytes()))
+        self._frame_buffer.append(len(self._frame.tobytes()))
         self._bandwidth_last_modified_time = time.time()
         async with self._lock:
             return self._frame
@@ -129,7 +126,7 @@ class Stream(StreamBase):
             )
             if not val:
                 raise ValueError("Error encoding frame")
-            self._byte_frame_window.append(len(frame.tobytes()))
+            self._frame_buffer.append(len(frame.tobytes()))
             self._bandwidth_last_modified_time = time.time()
             return frame
         return self._frame
@@ -149,7 +146,7 @@ class Stream(StreamBase):
         self._is_encoded = False
         if self._check_encoding(frame) == "jpeg":
             print(
-                "The frame is already encoded, will not encode again. \
+                "The frame is already encoded, I will not encode it again. \
                     Consider using CustomStream if you want to handle the processing yourself."
             )
             self._is_encoded = True
@@ -191,6 +188,7 @@ class ManagedStream(StreamBase):
         self._cap_is_open: bool = False
         self._cap: cv2.VideoCapture = cv2.VideoCapture(self.source)
         self._cap_background_task: Optional[asyncio.Task] = None
+        self._is_running: bool = False
         super().__init__(name, fps)
 
     async def _ensure_background_tasks(self) -> None:
@@ -242,11 +240,13 @@ class ManagedStream(StreamBase):
         )
         if not val:
             raise ValueError("Error encoding frame")
-        self._byte_frame_window.append(len(frame.tobytes()))
+        self._frame_buffer.append(len(frame.tobytes()))
         self._bandwidth_last_modified_time = time.time()
         return frame
 
     async def _get_frame(self) -> np.ndarray:
+        if not self._is_running:
+            raise RuntimeError("Stream has not started yet")
         await self._ensure_background_tasks()
         async with self._lock:
             return await self.__process_current_frame()
@@ -269,128 +269,24 @@ class ManagedStream(StreamBase):
 
     def change_source(self, source: Union[int, str]) -> None:
         self.source = source
-        self.__close_cap()
-        self.__open_cap()
+        if self._cap_is_open:
+            self.__close_cap()
+            self.__open_cap()
 
     def set_poll_delay_ms(self, poll_delay_ms: float) -> None:
         self.poll_delay_ms = poll_delay_ms / 1000
 
-
-class _StreamHandler:
-    def __init__(self, stream: StreamBase) -> None:
-        self._stream = stream
-
-    async def __call__(self, request: web.Request) -> web.StreamResponse:
-        viewer_token = request.cookies.get("viewer_token")
-        response = web.StreamResponse(
-            status=200,
-            reason="OK",
-            headers={
-                "Content-Type": "multipart/x-mixed-replace;boundary=image-boundary"
-            },
-        )
-        await response.prepare(request)
-        if not viewer_token:
-            viewer_token = await self._stream._add_viewer()
-            response.set_cookie("viewer_token", viewer_token)
-        elif viewer_token not in self._stream._active_viewers:
-            await self._stream._add_viewer(viewer_token)
-        try:
-            while True:
-                await asyncio.sleep(1 / self._stream.fps)
-                frame = await self._stream._get_frame()
-                with MultipartWriter(
-                    "image/jpeg", boundary="image-boundary"
-                ) as mpwriter:
-                    mpwriter.append(
-                        frame.tobytes(),
-                        MultiDict({"Content-Type": "image/jpeg"}),
-                    )
-                    try:
-                        await mpwriter.write(response, close_boundary=False)
-                    except (ConnectionResetError, ConnectionAbortedError):
-                        break
-                await response.write(b"\r\n")
-        finally:
-            await self._stream._remove_viewer(viewer_token)
-        return response
-
-
-class MjpegServer:
-    def __init__(
-        self, host: Union[str, List[str,]] = "localhost", port: int = 8080
-    ) -> None:
-        if isinstance(host, str) and host != "0.0.0.0":
-            self._host: List[str,] = [
-                host,
-            ]
-        elif isinstance(host, list):
-            if "0.0.0.0" in host:
-                host.remove("0.0.0.0")
-                host = host + [
-                    netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
-                    for iface in netifaces.interfaces()
-                    if netifaces.AF_INET in netifaces.ifaddresses(iface)
-                ]
-            self._host = list(set(host))
-        else:
-            self._host = [
-                netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
-                for iface in netifaces.interfaces()
-                if netifaces.AF_INET in netifaces.ifaddresses(iface)
-            ]
-        self._port = port
-        self._app: web.Application = web.Application()
-        self._app_is_running: bool = False
-        self._cap_routes: List[str,] = []
-
-    def is_running(self) -> bool:
-        return self._app_is_running
-
-    async def __root_handler(self, _) -> web.Response:
-        text = "<h2>Available streams:</h2>"
-        for route in self._cap_routes:
-            text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
-        return aiohttp.web.Response(text=text, content_type="text/html")
-
-    def add_stream(self, stream: StreamBase) -> None:
-        if self.is_running():
-            raise RuntimeError("Cannot add stream after the server has started")
-        route = f"/{stream.name}"
-        if route in self._cap_routes:
-            raise ValueError(f"A stream with the name {route} already exists")
-        self._cap_routes.append(route)
-        self._app.router.add_route("GET", route, _StreamHandler(stream))
-
-    def __start_func(self) -> None:
-        self._app.router.add_route("GET", "/", self.__root_handler)
-        runner = web.AppRunner(self._app)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(runner.setup())
-        site = web.TCPSite(runner, self._host, self._port)
-        loop.run_until_complete(site.start())
-        loop.run_forever()
-
     def start(self) -> None:
-        if not self.is_running():
-            thread = threading.Thread(target=self.__start_func, daemon=True)
-            thread.start()
-            self._app_is_running = True
+        if not self._is_running:
+            self._is_running = True
         else:
-            print("\nServer is already running\n")
-
-        for addr in self._host:
-            print(f"\nStreams index: http://{addr}:{self._port!s}")
-            print("Available streams:\n")
-            for route in self._cap_routes:  # route has a leading slash
-                print(f"http://{addr}:{self._port!s}{route}")
-            print("--------------------------------\n")
-        print("\nPress Ctrl+C to stop the server\n")
+            raise RuntimeError("Stream has already started")
 
     def stop(self) -> None:
-        if self.is_running():
-            self._app_is_running = False
-            print("\nStopping...\n")
-            raise GracefulExit
-        print("\nServer is not running\n")
+        if self._is_running:
+            self._is_running = False
+            self._cap_background_task.cancel()
+            if self._cap_is_open:
+                self.__close_cap()
+        else:
+            raise RuntimeError("Stream has already stopped")
