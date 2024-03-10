@@ -32,20 +32,20 @@ class _StreamHandler:
             await self._stream._add_viewer(viewer_token)
         try:
             while True:
-                await asyncio.sleep(1 / self._stream.fps)
-                frame = await self._stream._get_frame()
-                with MultipartWriter(
-                    "image/jpeg", boundary="image-boundary"
-                ) as mpwriter:
-                    mpwriter.append(
-                        frame.tobytes(),
-                        MultiDict({"Content-Type": "image/jpeg"}),
-                    )
-                    try:
+                try:
+                    await asyncio.sleep(1 / self._stream.fps)
+                    frame = await self._stream._get_frame()
+                    with MultipartWriter(
+                        "image/jpeg", boundary="image-boundary"
+                    ) as mpwriter:
+                        mpwriter.append(
+                            frame.tobytes(),
+                            MultiDict({"Content-Type": "image/jpeg"}),
+                        )
                         await mpwriter.write(response, close_boundary=False)
-                    except (ConnectionResetError, ConnectionAbortedError):
-                        break
-                await response.write(b"\r\n")
+                    await response.write(b"\r\n")
+                except (ConnectionResetError, ConnectionAbortedError):
+                    break
         finally:
             await self._stream._remove_viewer(viewer_token)
         return response
@@ -127,5 +127,7 @@ class MjpegServer:
         if self.is_running():
             self._app_is_running = False
             print("\nStopping...\n")
-            raise GracefulExit
-        print("\nServer is not running\n")
+            GracefulExit()
+            print("\nServer stopped\n")
+        else:
+            print("\nServer is not running\n")

@@ -113,23 +113,25 @@ class Stream(StreamBase):
     ) -> None:
         self.size = size
         self.quality = max(1, min(quality, 100))
-        self._is_encoded = False
         super().__init__(name, fps)
 
     async def __process_current_frame(self) -> np.ndarray:
-        if not self._is_encoded:
-            frame = cv2.resize(
-                self._frame, self.size or (self._frame.shape[1], self._frame.shape[0])
-            )
+        frame = self._frame
+        if not self._check_encoding(frame) == "jpeg":
+            frame = cv2.resize(frame, self.size or (frame.shape[1], frame.shape[0]))
             val, frame = cv2.imencode(
                 ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.quality]
             )
             if not val:
                 raise ValueError("Error encoding frame")
-            self._frame_buffer.append(len(frame.tobytes()))
-            self._bandwidth_last_modified_time = time.time()
-            return frame
-        return self._frame
+        else:
+            print(
+                "The frame is already encoded, I will not encode nor resize it again. \
+Consider using CustomStream if you want to handle the processing yourself."
+            )
+        self._frame_buffer.append(len(frame.tobytes()))
+        self._bandwidth_last_modified_time = time.time()
+        return frame
 
     async def _get_frame(self) -> np.ndarray:
         await self._ensure_background_tasks()
@@ -143,13 +145,6 @@ class Stream(StreamBase):
         self.quality = max(1, min(quality, 100))
 
     def set_frame(self, frame: np.ndarray) -> None:
-        self._is_encoded = False
-        if self._check_encoding(frame) == "jpeg":
-            print(
-                "The frame is already encoded, I will not encode it again. \
-                    Consider using CustomStream if you want to handle the processing yourself."
-            )
-            self._is_encoded = True
         self._frame = frame
 
     def get_frame(self) -> np.ndarray:
@@ -170,23 +165,23 @@ class ManagedStream(StreamBase):
     def __init__(
         self,
         name: str,
+        source: Union[int, str] = 0,
         fps: int = 30,
         size: Optional[Tuple[int, int]] = None,
         quality: int = 50,
-        source: Union[int, str] = 0,
         mode: str = "fast-on-demand",
         poll_delay_ms: Optional[Union[float, int]] = None,
     ) -> None:
+        self.source = source
         self.mode = mode
         self._available_modes: List[str,] = ["fast-on-demand", "full-on-demand"]
         if self.mode not in self._available_modes:
             raise ValueError(f"Invalid mode. Available modes: {self._available_modes}")
         self.size = size
         self.quality = max(1, min(quality, 100))
-        self.source = source
-        self.poll_delay_ms = poll_delay_ms / 1000 if poll_delay_ms else 1 / fps
+        self.poll_delay_seconds = poll_delay_ms / 1000 if poll_delay_ms else 1 / fps
         self._cap_is_open: bool = False
-        self._cap: cv2.VideoCapture = cv2.VideoCapture(self.source)
+        self._cap: cv2.VideoCapture = None
         self._cap_background_task: Optional[asyncio.Task] = None
         self._is_running: bool = False
         super().__init__(name, fps)
@@ -198,7 +193,7 @@ class ManagedStream(StreamBase):
 
     async def __manage_cap_state(self) -> None:
         while True:
-            await asyncio.sleep(self.poll_delay_ms)
+            await asyncio.sleep(self.poll_delay_seconds)
             if self.mode == "full-on-demand":
                 if self.has_demand() and not self._cap_is_open:
                     self.__open_cap()
@@ -208,19 +203,19 @@ class ManagedStream(StreamBase):
                 self.__open_cap()
 
     def __open_cap(self) -> None:
-        if not self._cap_is_open:
+        if not self._cap_is_open and self._is_running:
             self._cap = cv2.VideoCapture(self.source)
             if not self._cap.isOpened():
                 raise ValueError("Cannot open the capture device")
             self._cap_is_open = True
 
     def __close_cap(self) -> None:
-        if self._cap_is_open:
+        if self._cap_is_open and self._is_running:
             self._cap.release()
             self._cap_is_open = False
 
     async def __read_frame(self) -> None:
-        if self._cap_is_open:
+        if self._cap_is_open and self._is_running:
             val, frame = self._cap.read()
             if not val:
                 raise ValueError("Error reading frame")
@@ -239,6 +234,11 @@ class ManagedStream(StreamBase):
             ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.quality]
         )
         if not val:
+            if self._cap.getBackendName() == "FFMPEG":
+                raise ValueError(
+                    "Seems like you are using a video file as the source. \
+The media might have ended."
+                )
             raise ValueError("Error encoding frame")
         self._frame_buffer.append(len(frame.tobytes()))
         self._bandwidth_last_modified_time = time.time()
@@ -246,7 +246,8 @@ class ManagedStream(StreamBase):
 
     async def _get_frame(self) -> np.ndarray:
         if not self._is_running:
-            raise RuntimeError("Stream has not started yet")
+            print("Stream is not running, please call the start method first.")
+            return self._frame
         await self._ensure_background_tasks()
         async with self._lock:
             return await self.__process_current_frame()
@@ -264,29 +265,28 @@ class ManagedStream(StreamBase):
 
     def change_mode(self, mode: str) -> None:
         if mode not in self._available_modes:
-            raise ValueError(f"Invalid mode. Available modes: {self._available_modes}")
+            print(f"Invalid mode. Available modes: {self._available_modes}")
         self.mode = mode
 
     def change_source(self, source: Union[int, str]) -> None:
         self.source = source
-        if self._cap_is_open:
-            self.__close_cap()
-            self.__open_cap()
+        self.__close_cap()
+        self.__open_cap()
 
     def set_poll_delay_ms(self, poll_delay_ms: float) -> None:
-        self.poll_delay_ms = poll_delay_ms / 1000
+        self.poll_delay_seconds = poll_delay_ms / 1000
 
     def start(self) -> None:
         if not self._is_running:
             self._is_running = True
         else:
-            raise RuntimeError("Stream has already started")
+            print("Stream has already started")
 
     def stop(self) -> None:
         if self._is_running:
-            self._is_running = False
             self._cap_background_task.cancel()
-            if self._cap_is_open:
-                self.__close_cap()
+            self.__close_cap()
+            self._is_running = False
+            self._cap_is_open = False
         else:
-            raise RuntimeError("Stream has already stopped")
+            print("Stream has already stopped")

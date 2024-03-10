@@ -1,3 +1,5 @@
+# WON'T WORK RIGHT NOW. USE THE MAIN BRANCH FOR THE CLI
+
 import argparse
 import re
 import threading
@@ -5,7 +7,8 @@ from typing import List, Tuple, Union
 
 import cv2
 
-from mjpeg_streamer import MjpegServer, Stream
+from .server import MjpegServer
+from .stream import Stream
 
 
 def parse_args() -> argparse.Namespace:
