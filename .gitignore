@@ -7,3 +7,6 @@ build/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+test*.py
+!test_*.py
+test-perf/

@@ -79,9 +79,9 @@ isolated = true
 path = "mjpeg_streamer/__init__.py"
 
 [tool.ruff]
-exclude = ["examples"]
+exclude = ["examples", "test*"]
 fix = false
-ignore = [
+lint.ignore = [
     "TID252", # Relative imports are banned | __init__.py
     "T201", # `print` found | TODO: Migrate to logging
     "S104", # Possible binding to all interfaces | False positive
