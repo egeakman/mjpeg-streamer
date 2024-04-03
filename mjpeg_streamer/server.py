@@ -3,7 +3,6 @@ import threading
 from typing import List, Union
 
 import aiohttp
-import netifaces
 from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
 from multidict import MultiDict
@@ -51,29 +50,20 @@ class _StreamHandler:
         return response
 
 
-class MjpegServer:
+class Server:
     def __init__(
         self, host: Union[str, List[str,]] = "localhost", port: int = 8080
     ) -> None:
-        if isinstance(host, str) and host != "0.0.0.0":
+        if isinstance(host, str):
             self._host: List[str,] = [
                 host,
             ]
         elif isinstance(host, list):
             if "0.0.0.0" in host:
-                host.remove("0.0.0.0")
-                host = host + [
-                    netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
-                    for iface in netifaces.interfaces()
-                    if netifaces.AF_INET in netifaces.ifaddresses(iface)
-                ]
+                host = ["0.0.0.0"]
+            if "localhost" in host and "127.0.0.1" in host:
+                host.remove("localhost")
             self._host = list(set(host))
-        else:
-            self._host = [
-                netifaces.ifaddresses(iface)[netifaces.AF_INET][0]["addr"]
-                for iface in netifaces.interfaces()
-                if netifaces.AF_INET in netifaces.ifaddresses(iface)
-            ]
         self._port = port
         self._app: web.Application = web.Application()
         self._app_is_running: bool = False
@@ -131,3 +121,11 @@ class MjpegServer:
             print("\nServer stopped\n")
         else:
             print("\nServer is not running\n")
+
+
+class MjpegServer(Server):
+    # Alias for Server, to maintain backwards compatibility
+    def __init__(
+        self, host: Union[str, List[str,]] = "localhost", port: int = 8080
+    ) -> None:
+        super().__init__(host, port)

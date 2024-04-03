@@ -27,14 +27,6 @@ class StreamBase:
         self._deque_background_task: Optional[asyncio.Task] = None
         self._active_viewers: Set[str,] = set()
 
-    async def _add_viewer(self, viewer_token: Optional[str] = None) -> str:
-        viewer_token = viewer_token or str(uuid.uuid4())
-        self._active_viewers.add(viewer_token)
-        return viewer_token
-
-    async def _remove_viewer(self, viewer_token: str) -> None:
-        self._active_viewers.discard(viewer_token)
-
     async def __clear_deque(self) -> None:
         while True:
             await asyncio.sleep(1 / self.fps)
@@ -43,6 +35,14 @@ class StreamBase:
                 and time.time() - self._bandwidth_last_modified_time >= 1
             ):
                 self._frame_buffer.clear()
+
+    async def _add_viewer(self, viewer_token: Optional[str] = None) -> str:
+        viewer_token = viewer_token or str(uuid.uuid4())
+        self._active_viewers.add(viewer_token)
+        return viewer_token
+
+    async def _remove_viewer(self, viewer_token: str) -> None:
+        self._active_viewers.discard(viewer_token)
 
     async def _ensure_background_tasks(self) -> None:
         if self._deque_background_task is None or self._deque_background_task.done():
@@ -85,7 +85,8 @@ class StreamBase:
     async def _get_frame(self) -> np.ndarray:
         # A little hacky, if you have a better way, please let me know
         await self._ensure_background_tasks()
-        # Checking here to avoid continous polling
+        # Checking the encoding here instead of set_frame
+        # to avoid continous polling
         if self._check_encoding(self._frame) != "jpeg":
             raise ValueError(
                 "Input is not an encoded JPEG frame. Use OpenCV's imencode method to encode the frame to JPEG."
@@ -113,6 +114,7 @@ class Stream(StreamBase):
     ) -> None:
         self.size = size
         self.quality = max(1, min(quality, 100))
+        self._last_processed_frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
         super().__init__(name, fps)
 
     async def __process_current_frame(self) -> np.ndarray:
@@ -131,9 +133,12 @@ Consider using CustomStream if you want to handle the processing yourself."
             )
         self._frame_buffer.append(len(frame.tobytes()))
         self._bandwidth_last_modified_time = time.time()
+        self._last_processed_frame = frame
         return frame
 
     async def _get_frame(self) -> np.ndarray:
+        if time.time() - self._bandwidth_last_modified_time <= 1 / self.fps:
+            return self._last_processed_frame
         await self._ensure_background_tasks()
         async with self._lock:
             return await self.__process_current_frame()
@@ -242,12 +247,15 @@ The media might have ended."
             raise ValueError("Error encoding frame")
         self._frame_buffer.append(len(frame.tobytes()))
         self._bandwidth_last_modified_time = time.time()
+        self._last_processed_frame = frame
         return frame
 
     async def _get_frame(self) -> np.ndarray:
         if not self._is_running:
             print("Stream is not running, please call the start method first.")
             return self._frame
+        if time.time() - self._bandwidth_last_modified_time <= 1 / self.fps:
+            return self._last_processed_frame
         await self._ensure_background_tasks()
         async with self._lock:
             return await self.__process_current_frame()
