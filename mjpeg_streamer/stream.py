@@ -14,6 +14,10 @@ class StreamBase:
         name: str,
         fps: int = 30,
     ) -> None:
+        if type(self) is StreamBase:
+            raise TypeError(
+                "StreamBase is an abstract class and cannot be instantiated."
+            )
         self.name = name.casefold().replace(" ", "_")
         self.fps = fps
         self._frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
@@ -22,9 +26,6 @@ class StreamBase:
         self._bandwidth_last_modified_time: float = time.time()
         self._active_viewers: Set[str] = set()
         self._bandwidth_background_task: Optional[asyncio.Task] = None
-
-    def __new__(self, *args, **kwargs):
-        raise TypeError("Cannot instantiate an abstract class")
 
     async def _ensure_background_tasks(self) -> None:
         if (
