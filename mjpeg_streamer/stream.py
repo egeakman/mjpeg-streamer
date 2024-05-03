@@ -2,7 +2,7 @@ import asyncio
 import time
 import uuid
 from collections import deque
-from typing import Deque, List, Optional, Set, Tuple, Union
+from typing import Deque, Dict, List, Optional, Set, Tuple, Union
 
 import cv2
 import numpy as np
@@ -14,10 +14,6 @@ class StreamBase:
         name: str,
         fps: int = 30,
     ) -> None:
-        if type(self) is StreamBase:
-            raise TypeError(
-                "StreamBase is an abstract class and cannot be instantiated."
-            )
         self.name = name.casefold().replace(" ", "_")
         self.fps = fps
         self._frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
@@ -25,18 +21,16 @@ class StreamBase:
         self._frames_buffer: Deque[int] = deque(maxlen=fps)
         self._bandwidth_last_modified_time: float = time.time()
         self._active_viewers: Set[str] = set()
-        self._bandwidth_background_task: Optional[asyncio.Task] = None
+        self._tasks: Dict[str, asyncio.Task] = {"_clear_bandwidth": None}
 
     async def _ensure_background_tasks(self) -> None:
-        if (
-            self._bandwidth_background_task is None
-            or self._bandwidth_background_task.done()
-        ):
-            self._bandwidth_background_task = asyncio.create_task(
-                self.__clear_bandwidth()
-            )
+        for task_name, task in self._tasks.items():
+            if task is None or task.done():
+                self._tasks[task_name] = asyncio.create_task(
+                    eval(f"self.{task_name}()")
+                )
 
-    async def __clear_bandwidth(self) -> None:
+    async def _clear_bandwidth(self) -> None:
         while True:
             await asyncio.sleep(1.0 / self.fps)
             if (
@@ -120,9 +114,6 @@ class StreamBase:
         self._frame = frame
 
 
-CustomStream = StreamBase
-
-
 class Stream(StreamBase):
     def __init__(
         self,
@@ -163,6 +154,7 @@ class ManagedStream(StreamBase):
         mode: str = "fast-on-demand",
         poll_delay_ms: Optional[Union[float, int]] = None,
     ) -> None:
+        super().__init__(name, fps)
         self.source = source
         self.mode = mode
         self._available_modes: List[str,] = ["fast-on-demand", "full-on-demand"]
@@ -175,14 +167,9 @@ class ManagedStream(StreamBase):
         self._cap: cv2.VideoCapture = None
         self._cap_background_task: Optional[asyncio.Task] = None
         self._is_running: bool = False
-        super().__init__(name, fps)
+        self._tasks["_manage_cap_state"] = None
 
-    async def _ensure_background_tasks(self) -> None:
-        await super()._ensure_background_tasks()
-        if self._cap_background_task is None or self._cap_background_task.done():
-            self._cap_background_task = asyncio.create_task(self.__manage_cap_state())
-
-    async def __manage_cap_state(self) -> None:
+    async def _manage_cap_state(self) -> None:
         while True:
             await asyncio.sleep(self.poll_delay_seconds)
             if self.mode == "full-on-demand":
@@ -223,7 +210,6 @@ class ManagedStream(StreamBase):
     async def _process_current_frame(self) -> np.ndarray:
         if not self.has_demand():
             return self._last_processed_frame
-        print("reading frame")
         await self.__read_frame()
         frame = await self._resize_and_encode_frame(
             self._frame,
@@ -248,7 +234,7 @@ class ManagedStream(StreamBase):
 
     def set_frame(self, frame: np.ndarray) -> None:
         raise NotImplementedError(
-            "This method is not available for ManagedStream, use Stream or CustomStream instead."
+            "This method is not available for ManagedStream, use Stream or StreamBase instead."
         )
 
     def change_mode(self, mode: str) -> None:

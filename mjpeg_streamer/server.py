@@ -23,7 +23,10 @@ class _StreamHandler:
                 "Content-Type": "multipart/x-mixed-replace;boundary=image-boundary"
             },
         )
-        await response.prepare(request)
+        try:
+            await response.prepare(request)
+        except (ConnectionResetError, ConnectionAbortedError):
+            pass
         if not viewer_token:
             viewer_token = await self._stream._add_viewer()
             response.set_cookie("viewer_token", viewer_token)
@@ -125,7 +128,4 @@ class Server:
 
 class MjpegServer(Server):
     # Alias for Server, to maintain backwards compatibility
-    def __init__(
-        self, host: Union[str, List[str,]] = "localhost", port: int = 8080
-    ) -> None:
-        super().__init__(host, port)
+    pass

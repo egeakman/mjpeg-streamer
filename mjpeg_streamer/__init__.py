@@ -1,5 +1,5 @@
 from .server import MjpegServer, Server
-from .stream import CustomStream, ManagedStream, Stream
+from .stream import ManagedStream, Stream, StreamBase
 
-__all__ = ["CustomStream", "ManagedStream", "MjpegServer", "Stream", "Server"]
+__all__ = ["StreamBase", "ManagedStream", "MjpegServer", "Stream", "Server"]
 __version__ = "2024.2.8"
