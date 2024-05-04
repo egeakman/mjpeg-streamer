@@ -4,7 +4,7 @@ from mjpeg_streamer import Server, StreamBase
 
 capture = cv2.VideoCapture(0)
 
-server = Server()
+server = Server(host="0.0.0.0", port=8080)
 stream = StreamBase("test", fps=30)
 
 server.add_stream(stream)

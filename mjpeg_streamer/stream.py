@@ -104,7 +104,7 @@ class StreamBase:
     async def _get_frame(self) -> np.ndarray:
         await self._ensure_background_tasks()  # A little hacky
         if time.time() - self._bandwidth_last_modified_time <= 1.0 / self.fps:
-            return self._last_processed_frame
+            return self._last_processed_frame  # Prevents redundant processing
         async with self._lock:
             self._frames_buffer.append(len(self._frame.tobytes()))
             self._bandwidth_last_modified_time = time.time()

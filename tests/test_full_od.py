@@ -2,7 +2,7 @@ import time
 
 from mjpeg_streamer import ManagedStream, Server
 
-server = Server()
+server = Server(host="0.0.0.0", port=8080)
 stream = ManagedStream(
     "test",
     source=0,
