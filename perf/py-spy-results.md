@@ -8,6 +8,8 @@ py-spy top -- python tests/<test_script>.py
 
 ## Results
 
+*Python version: 3.11.8*
+
 ### test_streambase:
 - no demand:
 ``GIL: 0% Active: 5-15% Threads: 2``
