@@ -1,6 +1,6 @@
 # Usage Tests
 
-Results gathered from running the tests in the [tests](tests/) directory. These results are very arbitrary and should not be taken as a definitive measure of performance. They are meant to give a rough idea of how the system behaves under different conditions.
+Results gathered from running the tests in the [tests](../tests/) directory. These results are very arbitrary and should not be taken as a definitive measure of performance. They are meant to give a rough idea of how the system behaves under different conditions.
 
 ## Computer Specs
 
