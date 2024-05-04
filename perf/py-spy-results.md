@@ -1,6 +1,6 @@
 # PY-SPY Tests
 
-Performance results gathered using py-spy. [Test scripts](tests/) were run with the following command:
+Performance results gathered using py-spy. [Test scripts](../tests/) were run with the following command:
 
 ```bash
 py-spy top -- python tests/<test_script>.py
