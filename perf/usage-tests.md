@@ -22,6 +22,8 @@ Memory: 15313MiB
 
 ## Results
 
+*Python version: 3.11.8*
+
 ### test_streambase:
 - no demand:
 ``CPU: 14-16% Memory: 39.2 MB``
