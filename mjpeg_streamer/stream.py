@@ -17,6 +17,9 @@ class StreamBase:
         self.name = name.casefold().replace(" ", "_")
         self.fps = fps
         self._frame: np.ndarray = np.zeros((320, 240, 1), dtype=np.uint8)
+        self._last_processed_frame: np.ndarray = cv2.imencode(
+            ".jpg", self._frame, [cv2.IMWRITE_JPEG_QUALITY, 1]
+        )[1]
         self._lock: asyncio.Lock = asyncio.Lock()
         self._frames_buffer: Deque[int] = deque(maxlen=fps)
         self._bandwidth_last_modified_time: float = time.time()
@@ -55,15 +58,15 @@ class StreamBase:
 
     async def __check_encoding(self, frame: np.ndarray) -> str:
         if isinstance(frame, np.ndarray) and frame.ndim == 1 and frame.size > 2:
-            # Check JPEG header (0xFFD8) and footer (0xFFD9)
+            # Check JPG header (0xFFD8) and footer (0xFFD9)
             if (
                 frame[0] == 255
                 and frame[1] == 216
                 and frame[-2] == 255
                 and frame[-1] == 217
             ):
-                return "jpeg"
-            return "one-dim-non-jpeg"
+                return "jpg"
+            return "one-dim-non-jpg"
         if isinstance(frame, np.ndarray):
             return "multi-dim"
         return "unknown"
@@ -72,7 +75,7 @@ class StreamBase:
         self, frame: np.ndarray, size: Tuple[int, int], quality: int
     ) -> np.ndarray:
         resized_frame = cv2.resize(frame, size)
-        if not await self.__check_encoding(resized_frame) == "jpeg":
+        if not await self.__check_encoding(resized_frame) == "jpg":
             val, encoded_frame = cv2.imencode(
                 ".jpg", resized_frame, [cv2.IMWRITE_JPEG_QUALITY, quality]
             )
@@ -106,7 +109,7 @@ class StreamBase:
         if time.time() - self._bandwidth_last_modified_time <= 1.0 / self.fps:
             return self._last_processed_frame  # Prevents redundant processing
         async with self._lock:
-            self._frames_buffer.append(len(self._frame.tobytes()))
+            self._frames_buffer.append(len(self._last_processed_frame.tobytes()))
             self._bandwidth_last_modified_time = time.time()
             return await self._process_current_frame()
 
