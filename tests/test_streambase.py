@@ -10,7 +10,10 @@ stream = StreamBase("test", fps=30)
 server.add_stream(stream)
 server.start()
 
+print(stream.settings())
+
 while True:
     frame = capture.read()[1]
     frame = cv2.imencode(".jpg", frame)[1]
     stream.set_frame(frame)
+    print(stream.get_bandwidth() / 1024, "KB/s", end="\r")

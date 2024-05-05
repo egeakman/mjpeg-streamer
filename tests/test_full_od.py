@@ -17,5 +17,8 @@ server.add_stream(stream)
 server.start()
 stream.start()
 
+print(stream.settings())
+
 while True:
     time.sleep(1 / 30)
+    print(stream.get_bandwidth() / 1024, "KB/s", end="\r")
