@@ -168,7 +168,6 @@ class ManagedStream(StreamBase):
         self.poll_delay_seconds = poll_delay_ms / 1000.0 if poll_delay_ms else 1.0 / fps
         self._cap_is_open: bool = False
         self._cap: cv2.VideoCapture = None
-        self._cap_background_task: Optional[asyncio.Task] = None
         self._is_running: bool = False
         self._tasks["_manage_cap_state"] = None
 
@@ -261,8 +260,12 @@ class ManagedStream(StreamBase):
 
     def stop(self) -> None:
         if self._is_running:
-            self._cap_background_task.cancel()
-            self.__close_cap()
+            for task in self._tasks.values():
+                if task and not task.done():
+                    task.cancel()
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(self.__close_cap())
+            loop.close() if loop.is_running() else None
             self._is_running = False
             self._cap_is_open = False
         else:
