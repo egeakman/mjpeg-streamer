@@ -78,11 +78,10 @@ def main() -> None:
             else:
                 time.sleep(1)  # Keep the main thread alive, but don't consume CPU
     except KeyboardInterrupt:
-        for stream in streams:
-            stream.stop()
-        server.stop()
+        print("\nExiting...")
     except Exception as e:
-        print(e)
+        print("Error:", e)
+    finally:
         for stream in streams:
             stream.stop()
         server.stop()
