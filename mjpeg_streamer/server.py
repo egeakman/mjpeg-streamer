@@ -25,7 +25,7 @@ class _StreamHandler:
         )
         try:
             await response.prepare(request)
-        except (ConnectionResetError, ConnectionAbortedError):
+        except (ConnectionResetError, ConnectionAbortedError, ConnectionError):
             pass
         if not viewer_token:
             viewer_token = await self._stream._add_viewer()
@@ -46,7 +46,7 @@ class _StreamHandler:
                         )
                         await mpwriter.write(response, close_boundary=False)
                     await response.write(b"\r\n")
-                except (ConnectionResetError, ConnectionAbortedError):
+                except (ConnectionResetError, ConnectionAbortedError, ConnectionError):
                     break
         finally:
             await self._stream._remove_viewer(viewer_token)
