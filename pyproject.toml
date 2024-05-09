@@ -54,7 +54,6 @@ dependencies = [
   'aiohttp==3.8.6; python_version >= "3.6" and python_version <= "3.7"',
   'aiohttp==3.9.1; python_version == "3.8"',
   'aiohttp; python_version >= "3.9"',
-  "netifaces",
   'numpy==1.19.5; python_version == "3.6"',
   'numpy==1.21.6; python_version == "3.7"',
   'numpy==1.24.4; python_version == "3.8"',
@@ -79,9 +78,9 @@ isolated = true
 path = "mjpeg_streamer/__init__.py"
 
 [tool.ruff]
-exclude = ["examples"]
+exclude = ["examples", "test*"]
 fix = false
-ignore = [
+lint.ignore = [
     "TID252", # Relative imports are banned | __init__.py
     "T201", # `print` found | TODO: Migrate to logging
     "S104", # Possible binding to all interfaces | False positive
