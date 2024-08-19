@@ -118,7 +118,7 @@ class MjpegServer:
     async def __root_handler(self, _) -> web.Response:
         text = "<h2>Available streams:</h2>"
         for route in self._cap_routes:
-            text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
+            text += f"<a href='{route}'>{route}</a>\n<br>\n"
         return aiohttp.web.Response(text=text, content_type="text/html")
 
     def add_stream(self, stream: Stream) -> None:
