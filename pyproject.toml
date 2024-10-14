@@ -21,8 +21,8 @@ keywords = [
   "video",
   "webcam",
 ]
-license = {text = "AGPLv3"}
-authors = [{name = "Ege Akman", email = "me@egeakman.dev"}]
+license = { text = "AGPLv3" }
+authors = [ { name = "Ege Akman", email = "me@egeakman.dev" } ]
 requires-python = ">=3.6"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -43,6 +43,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
   "Topic :: Multimedia :: Video",
   "Topic :: Security",
@@ -51,49 +52,47 @@ dynamic = [
   "version",
 ]
 dependencies = [
-  'aiohttp==3.8.6; python_version >= "3.6" and python_version <= "3.7"',
-  'aiohttp==3.9.1; python_version == "3.8"',
-  'aiohttp; python_version >= "3.9"',
+  "aiohttp; python_version>='3.9'",
+  "aiohttp==3.8.6; python_version>='3.6' and python_version<='3.7'",
+  "aiohttp==3.9.1; python_version=='3.8'",
   "netifaces",
-  'numpy==1.19.5; python_version == "3.6"',
-  'numpy==1.21.6; python_version == "3.7"',
-  'numpy==1.24.4; python_version == "3.8"',
-  'numpy; python_version >= "3.9"',
-  'opencv-python==4.6.0.66; python_version == "3.6"',
-  'opencv-python==4.8.1.78; python_version >= "3.7" and python_version <= "3.8"',
-  'opencv-python; python_version >= "3.9"',
+  "numpy; python_version>='3.9'",
+  "numpy==1.19.5; python_version=='3.6'",
+  "numpy==1.21.6; python_version=='3.7'",
+  "numpy==1.24.4; python_version=='3.8'",
+  "opencv-python; python_version>='3.9'",
+  "opencv-python==4.6.0.66; python_version=='3.6'",
+  "opencv-python==4.8.1.78; python_version>='3.7' and python_version<='3.8'",
 ]
-[project.urls]
-Homepage = "https://github.com/egeakman/mjpeg-streamer"
-Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
-Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
-[project.scripts]
-mjpeg-streamer = "mjpeg_streamer.cli:main"
+urls.Homepage = "https://github.com/egeakman/mjpeg-streamer"
+urls.Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
+urls.Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
+scripts.mjpeg-streamer = "mjpeg_streamer.cli:main"
 
 [tool.hatch.build]
-packages = ["mjpeg_streamer"]
-exclude = ["examples"]
+packages = [ "mjpeg_streamer" ]
+exclude = [ "examples" ]
 isolated = true
 
 [tool.hatch.version]
 path = "mjpeg_streamer/__init__.py"
 
 [tool.ruff]
-exclude = ["examples"]
+exclude = [ "examples" ]
 fix = false
 ignore = [
-    "TID252", # Relative imports are banned | __init__.py
-    "T201", # `print` found | TODO: Migrate to logging
-    "S104", # Possible binding to all interfaces | False positive
-    "EM101", # Exception must not use a string literal
-    "EM102", # Exception must not use an f-string literal
-    "TRY003", # Avoid specifying long messages outside the exception class
-    "UP007", # Use `X | Y` for type annotations | Have to use `typing.Union` for Python 3.6 compatibility
-    "FBT001", # Boolean-typed positional argument in function definition
-    "FA100", # Missing `from __future__ import annotations` | It works without it
+  "TID252", # Relative imports are banned | __init__.py
+  "T201",   # `print` found | TODO: Migrate to logging
+  "S104",   # Possible binding to all interfaces | False positive
+  "EM101",  # Exception must not use a string literal
+  "EM102",  # Exception must not use an f-string literal
+  "TRY003", # Avoid specifying long messages outside the exception class
+  "UP007",  # Use `X | Y` for type annotations | Have to use `typing.Union` for Python 3.6 compatibility
+  "FBT001", # Boolean-typed positional argument in function definition
+  "FA100",  # Missing `from __future__ import annotations` | It works without it
 ]
 
 [tool.isort]
 profile = "black"
 known_first_party = "mjpeg_streamer"
-skip = ["examples"]
+skip = [ "examples" ]
