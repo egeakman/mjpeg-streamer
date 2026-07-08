@@ -79,7 +79,9 @@ class _AudioHandler:
         try:
             # Wait for first chunk so the browser gets real audio immediately
             try:
-                await asyncio.wait_for(self._stream._first_chunk_ready.wait(), timeout=5.0)
+                await asyncio.wait_for(
+                    self._stream._first_chunk_ready.wait(), timeout=5.0
+                )
             except asyncio.TimeoutError:
                 pass
             header = self._stream._make_wav_header_bytes()
