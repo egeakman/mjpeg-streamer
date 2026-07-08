@@ -33,14 +33,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--audio",
-        action="store_true",
-        help="Enable audio streaming (requires pyaudio)",
-    )
-    parser.add_argument(
-        "--audio-device",
-        type=int,
+        action="append",
+        nargs="?",
+        const=None,
         default=None,
-        help="Audio input device index (default: system default)",
+        metavar="DEVICE",
+        help="Enable audio streaming. Optionally pass a device index (repeatable, e.g. --audio 0 --audio 1)",
     )
     parser.add_argument(
         "--audio-rate",
@@ -114,14 +112,21 @@ def main() -> None:
 
     if args.audio:
         try:
-            audio_stream = AudioStream(
-                name=f"{args.prefix}{'_' if args.prefix else ''}audio",
-                source=args.audio_device,
-                sample_rate=args.audio_rate,
-                channels=args.audio_channels,
-            )
-            server.add_stream(audio_stream)
-            audio_streams.append(audio_stream)
+            for i, device in enumerate(args.audio):
+                device_index = int(device) if device is not None else None
+                name = (
+                    f"{args.prefix}{'_' if args.prefix else ''}audio_{device_index}"
+                    if device_index is not None
+                    else f"{args.prefix}{'_' if args.prefix else ''}audio"
+                )
+                audio_stream = AudioStream(
+                    name=name,
+                    source=device_index,
+                    sample_rate=args.audio_rate,
+                    channels=args.audio_channels,
+                )
+                server.add_stream(audio_stream)
+                audio_streams.append(audio_stream)
         except ImportError as e:
             print(f"Audio not available: {e}")
         except Exception as e:

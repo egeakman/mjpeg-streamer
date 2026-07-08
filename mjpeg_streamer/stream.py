@@ -1,5 +1,6 @@
 import asyncio
 import struct
+import threading
 import time
 import uuid
 from collections import deque
@@ -311,6 +312,7 @@ class AudioStream:
         self._last_chunk: bytes = b""
         self._bandwidth_buffer: Deque[int] = deque(maxlen=sample_rate // chunk_size)
         self._bandwidth_last_modified_time: float = time.time()
+        self._first_chunk_ready: asyncio.Event = asyncio.Event()
         self._tasks: Dict[str, asyncio.Task] = {"_capture_loop": None}
 
     def _make_wav_header(self, data_size: int) -> bytes:
@@ -372,6 +374,8 @@ class AudioStream:
             try:
                 data = self._stream.read(self.chunk_size, exception_on_overflow=False)
                 self._last_chunk = data
+                if not self._first_chunk_ready.is_set():
+                    self._first_chunk_ready.set()
                 async with self._lock:
                     self._bandwidth_buffer.append(len(data))
                     self._bandwidth_last_modified_time = time.time()
@@ -401,6 +405,7 @@ class AudioStream:
         if self._is_running:
             print("Audio stream has already started")
             return
+        self._first_chunk_ready.clear()
         self._pa = pyaudio.PyAudio()
         self._stream = self._pa.open(
             format=pyaudio.paInt16 if self.sample_width == 2 else pyaudio.paInt8,
@@ -411,6 +416,13 @@ class AudioStream:
             frames_per_buffer=self.chunk_size,
         )
         self._is_running = True
+        thread = threading.Thread(target=self._run_capture_loop, daemon=True)
+        thread.start()
+
+    def _run_capture_loop(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self._capture_loop())
 
     def stop(self) -> None:
         if not self._is_running:
