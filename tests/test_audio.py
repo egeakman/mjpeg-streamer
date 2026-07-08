@@ -87,7 +87,9 @@ class TestWavHeader:
 
     def test_stereo_header(self):
         with patch("mjpeg_streamer.stream.pyaudio"):
-            stream = AudioStream("stereo", channels=2, sample_width=2, sample_rate=44100)
+            stream = AudioStream(
+                "stereo", channels=2, sample_width=2, sample_rate=44100
+            )
         header = stream._make_wav_header_bytes()
         channels = struct.unpack_from("<H", header, 22)[0]
         byte_rate = struct.unpack_from("<I", header, 28)[0]
@@ -99,9 +101,7 @@ class TestWavHeader:
 
 class TestViewerLifecycle:
     def test_add_viewer(self, audio_stream):
-        token = asyncio.get_event_loop().run_until_complete(
-            audio_stream._add_viewer()
-        )
+        token = asyncio.get_event_loop().run_until_complete(audio_stream._add_viewer())
         assert isinstance(token, str)
         assert len(token) > 0
         assert audio_stream.active_viewers() == 1
@@ -112,9 +112,7 @@ class TestViewerLifecycle:
         assert audio_stream.active_viewers() == 2
 
     def test_remove_viewer(self, audio_stream):
-        token = asyncio.get_event_loop().run_until_complete(
-            audio_stream._add_viewer()
-        )
+        token = asyncio.get_event_loop().run_until_complete(audio_stream._add_viewer())
         asyncio.get_event_loop().run_until_complete(audio_stream._remove_viewer(token))
         assert audio_stream.active_viewers() == 0
 
