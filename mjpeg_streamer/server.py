@@ -7,7 +7,7 @@ from aiohttp import MultipartWriter, web
 from aiohttp.web_runner import GracefulExit
 from multidict import MultiDict
 
-from .stream import StreamBase
+from .stream import AudioStream, StreamBase
 
 
 class _StreamHandler:
@@ -53,6 +53,48 @@ class _StreamHandler:
         return response
 
 
+class _AudioHandler:
+    def __init__(self, stream: AudioStream) -> None:
+        self._stream = stream
+
+    async def __call__(self, request: web.Request) -> web.StreamResponse:
+        viewer_token = request.cookies.get("viewer_token")
+        response = web.StreamResponse(
+            status=200,
+            reason="OK",
+            headers={
+                "Content-Type": "audio/wav",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+            },
+        )
+        try:
+            await response.prepare(request)
+        except (ConnectionResetError, ConnectionAbortedError, ConnectionError):
+            pass
+        if not viewer_token:
+            viewer_token = await self._stream._add_viewer()
+            response.set_cookie("viewer_token", viewer_token)
+        elif viewer_token not in self._stream._active_viewers:
+            await self._stream._add_viewer(viewer_token)
+        try:
+            # Send WAV header first
+            header = self._stream._make_wav_header_bytes()
+            await response.write(header)
+            while True:
+                try:
+                    await asyncio.sleep(1.0 / (
+                        self._stream.sample_rate / self._stream.chunk_size
+                    ))
+                    chunk = self._stream._last_chunk
+                    if chunk:
+                        await response.write(chunk)
+                except (ConnectionResetError, ConnectionAbortedError, ConnectionError):
+                    break
+        finally:
+            await self._stream._remove_viewer(viewer_token)
+        return response
+
+
 class Server:
     def __init__(
         self, host: Union[str, List[str,]] = "localhost", port: int = 8080
@@ -71,6 +113,7 @@ class Server:
         self._app: web.Application = web.Application()
         self._app_is_running: bool = False
         self._cap_routes: List[str,] = []
+        self._audio_routes: List[str] = []
 
     def is_running(self) -> bool:
         return self._app_is_running
@@ -79,19 +122,39 @@ class Server:
         text = "<h2>Available streams:</h2>"
         for route in self._cap_routes:
             text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
+        if self._audio_routes:
+            text += "<h2>Audio streams:</h2>"
+            for route in self._audio_routes:
+                text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
+        if self._cap_routes and self._audio_routes:
+            text += f"<h2><a href='http://{self._host[0]}:{self._port}/player'>Player (synced audio+video)</a></h2>"
         return aiohttp.web.Response(text=text, content_type="text/html")
 
-    def add_stream(self, stream: StreamBase) -> None:
+    def add_stream(self, stream: Union[StreamBase, AudioStream]) -> None:
         if self.is_running():
             raise RuntimeError("Cannot add stream after the server has started")
         route = f"/{stream.name}"
-        if route in self._cap_routes:
-            raise ValueError(f"A stream with the name {route} already exists")
-        self._cap_routes.append(route)
-        self._app.router.add_route("GET", route, _StreamHandler(stream))
+        if isinstance(stream, AudioStream):
+            if route in self._audio_routes:
+                raise ValueError(f"An audio stream with the name {route} already exists")
+            self._audio_routes.append(route)
+            self._app.router.add_route("GET", route, _AudioHandler(stream))
+        else:
+            if route in self._cap_routes:
+                raise ValueError(f"A stream with the name {route} already exists")
+            self._cap_routes.append(route)
+            self._app.router.add_route("GET", route, _StreamHandler(stream))
+        if self._cap_routes and self._audio_routes:
+            from .player import PlayerHandler
+
+            self._app.router.add_route("GET", "/player", PlayerHandler(self))
 
     def __start_func(self) -> None:
         self._app.router.add_route("GET", "/", self.__root_handler)
+        if self._cap_routes and self._audio_routes:
+            from .player import PlayerHandler
+
+            self._app.router.add_route("GET", "/player", PlayerHandler(self))
         runner = web.AppRunner(self._app)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -113,6 +176,14 @@ class Server:
             print("Available streams:\n")
             for route in self._cap_routes:  # route has a leading slash
                 print(f"http://{addr}:{self._port!s}{route}")
+            if self._audio_routes:
+                print("\nAudio streams:\n")
+                for route in self._audio_routes:
+                    print(f"http://{addr}:{self._port!s}{route}")
+            if self._cap_routes and self._audio_routes:
+                print(
+                    f"\nPlayer: http://{addr}:{self._port!s}/player"
+                )
             print("--------------------------------\n")
         print("\nPress Ctrl+C to stop the server\n")
 

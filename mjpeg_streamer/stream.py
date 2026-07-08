@@ -1,4 +1,5 @@
 import asyncio
+import struct
 import time
 import uuid
 from collections import deque
@@ -6,6 +7,13 @@ from typing import Deque, Dict, List, Optional, Set, Tuple, Union
 
 import cv2
 import numpy as np
+
+try:
+    import pyaudio
+
+    _HAS_PYAUDIO = True
+except ImportError:
+    _HAS_PYAUDIO = False
 
 
 class StreamBase:
@@ -270,3 +278,156 @@ class ManagedStream(StreamBase):
             self._cap_is_open = False
         else:
             print("Stream has already stopped")
+
+
+class AudioStream:
+    def __init__(
+        self,
+        name: str,
+        source: Optional[int] = None,
+        sample_rate: int = 44100,
+        channels: int = 1,
+        sample_width: int = 2,
+        chunk_size: int = 1024,
+        format: str = "wav",
+    ) -> None:
+        if not _HAS_PYAUDIO:
+            raise ImportError(
+                "pyaudio is required for audio streaming. "
+                "Install it with: pip install pyaudio"
+            )
+        self.name = name.casefold().replace(" ", "_")
+        self.source = source
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.sample_width = sample_width
+        self.chunk_size = chunk_size
+        self.format = format
+        self._active_viewers: Set[str] = set()
+        self._lock: asyncio.Lock = asyncio.Lock()
+        self._is_running: bool = False
+        self._pa: Optional[pyaudio.PyAudio] = None
+        self._stream: Optional[pyaudio.Stream] = None
+        self._last_chunk: bytes = b""
+        self._bandwidth_buffer: Deque[int] = deque(maxlen=sample_rate // chunk_size)
+        self._bandwidth_last_modified_time: float = time.time()
+        self._tasks: Dict[str, asyncio.Task] = {"_capture_loop": None}
+
+    def _make_wav_header(self, data_size: int) -> bytes:
+        """Build a minimal WAV header for chunked streaming."""
+        byte_rate = self.sample_rate * self.channels * self.sample_width
+        block_align = self.channels * self.sample_width
+        header = struct.pack(
+            "<4sI4s4sIHHIIHH4sI",
+            b"RIFF",
+            36 + data_size,
+            b"WAVE",
+            b"fmt ",
+            16,
+            1,  # PCM
+            self.channels,
+            self.sample_rate,
+            byte_rate,
+            block_align,
+            self.sample_width * 8,
+            b"data",
+            data_size,
+        )
+        return header
+
+    def _make_wav_header_bytes(self) -> bytes:
+        """WAV header for an infinitely large stream."""
+        byte_rate = self.sample_rate * self.channels * self.sample_width
+        block_align = self.channels * self.sample_width
+        return struct.pack(
+            "<4sI4s4sIHHIIHH4sI",
+            b"RIFF",
+            0xFFFFFFFF,
+            b"WAVE",
+            b"fmt ",
+            16,
+            1,
+            self.channels,
+            self.sample_rate,
+            byte_rate,
+            block_align,
+            self.sample_width * 8,
+            b"data",
+            0xFFFFFFFF,
+        )
+
+    async def _ensure_background_tasks(self) -> None:
+        for task_name, task in self._tasks.items():
+            if task is None or task.done():
+                self._tasks[task_name] = asyncio.create_task(
+                    eval(f"self.{task_name}()")
+                )
+
+    async def _capture_loop(self) -> None:
+        """Background task that continuously reads audio from the device."""
+        while True:
+            if not self._is_running:
+                await asyncio.sleep(0.1)
+                continue
+            try:
+                data = self._stream.read(self.chunk_size, exception_on_overflow=False)
+                self._last_chunk = data
+                async with self._lock:
+                    self._bandwidth_buffer.append(len(data))
+                    self._bandwidth_last_modified_time = time.time()
+            except Exception:
+                await asyncio.sleep(0.1)
+
+    async def _add_viewer(self, viewer_token: Optional[str] = None) -> str:
+        viewer_token = viewer_token or str(uuid.uuid4())
+        async with self._lock:
+            self._active_viewers.add(viewer_token)
+        return viewer_token
+
+    async def _remove_viewer(self, viewer_token: str) -> None:
+        async with self._lock:
+            self._active_viewers.discard(viewer_token)
+
+    def has_demand(self) -> bool:
+        return len(self._active_viewers) > 0
+
+    def active_viewers(self) -> int:
+        return len(self._active_viewers)
+
+    def get_bandwidth(self) -> float:
+        return sum(self._bandwidth_buffer)
+
+    def start(self) -> None:
+        if self._is_running:
+            print("Audio stream has already started")
+            return
+        self._pa = pyaudio.PyAudio()
+        self._stream = self._pa.open(
+            format=pyaudio.paInt16 if self.sample_width == 2 else pyaudio.paInt8,
+            channels=self.channels,
+            rate=self.sample_rate,
+            input=True,
+            input_device_index=self.source,
+            frames_per_buffer=self.chunk_size,
+        )
+        self._is_running = True
+
+    def stop(self) -> None:
+        if not self._is_running:
+            print("Audio stream has already stopped")
+            return
+        self._is_running = False
+        for task in self._tasks.values():
+            if task and not task.done():
+                task.cancel()
+        if self._stream:
+            self._stream.stop_stream()
+            self._stream.close()
+        if self._pa:
+            self._pa.terminate()
+
+    def settings(self) -> None:
+        for key, value in self.__dict__.items():
+            if key.startswith("_"):
+                continue
+            print(f"{key}: {value}")

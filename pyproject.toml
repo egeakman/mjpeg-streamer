@@ -62,6 +62,9 @@ dependencies = [
   'opencv-python==4.8.1.78; python_version >= "3.7" and python_version <= "3.8"',
   'opencv-python; python_version >= "3.9"',
 ]
+
+[project.optional-dependencies]
+audio = ["pyaudio"]
 [project.urls]
 Homepage = "https://github.com/egeakman/mjpeg-streamer"
 Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
