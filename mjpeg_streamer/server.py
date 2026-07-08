@@ -82,9 +82,9 @@ class _AudioHandler:
             await response.write(header)
             while True:
                 try:
-                    await asyncio.sleep(1.0 / (
-                        self._stream.sample_rate / self._stream.chunk_size
-                    ))
+                    await asyncio.sleep(
+                        1.0 / (self._stream.sample_rate / self._stream.chunk_size)
+                    )
                     chunk = self._stream._last_chunk
                     if chunk:
                         await response.write(chunk)
@@ -136,7 +136,9 @@ class Server:
         route = f"/{stream.name}"
         if isinstance(stream, AudioStream):
             if route in self._audio_routes:
-                raise ValueError(f"An audio stream with the name {route} already exists")
+                raise ValueError(
+                    f"An audio stream with the name {route} already exists"
+                )
             self._audio_routes.append(route)
             self._app.router.add_route("GET", route, _AudioHandler(stream))
         else:
@@ -181,9 +183,7 @@ class Server:
                 for route in self._audio_routes:
                     print(f"http://{addr}:{self._port!s}{route}")
             if self._cap_routes and self._audio_routes:
-                print(
-                    f"\nPlayer: http://{addr}:{self._port!s}/player"
-                )
+                print(f"\nPlayer: http://{addr}:{self._port!s}/player")
             print("--------------------------------\n")
         print("\nPress Ctrl+C to stop the server\n")
 
