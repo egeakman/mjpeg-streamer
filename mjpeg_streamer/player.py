@@ -10,6 +10,8 @@ class PlayerHandler:
         audio_streams = self._server._audio_routes
         host = self._server._host[0]
         port = self._server._port
+        has_video = len(video_streams) > 0
+        has_audio = len(audio_streams) > 0
 
         video_options = "\n".join(
             f'<option value="http://{host}:{port}{r}">{r.lstrip("/")}</option>'
@@ -19,6 +21,26 @@ class PlayerHandler:
             f'<option value="http://{host}:{port}{r}">{r.lstrip("/")}</option>'
             for r in audio_streams
         )
+
+        video_section = ""
+        video_js = ""
+        if has_video:
+            video_section = """
+  <div class="player" id="videoPlayer">
+    <img id="video" alt="video stream">
+    <div class="status" id="status">Stopped</div>
+  </div>"""
+            video_js = """
+  const videoImg = document.getElementById('video');
+  const statusEl = document.getElementById('status');
+  const videoSelect = document.getElementById('videoSelect');"""
+
+        controls_html = ""
+        if has_video:
+            controls_html += '  <select id="videoSelect">{video_options}</select>\n'
+        if has_audio:
+            controls_html += '  <select id="audioSelect"><option value="">No audio</option>{audio_options}</select>\n'
+        controls_html += '  <button id="playBtn">Play</button>'
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -40,19 +62,18 @@ class PlayerHandler:
   .status.error {{ color: #f44; }}
   .volume {{ display: flex; align-items: center; gap: 6px; margin-top: 10px; }}
   .volume input[type=range] {{ width: 120px; accent-color: #e94560; }}
+  .audio-only {{ background: #16213e; border-radius: 8px; padding: 30px 40px; text-align: center; margin: 10px 0; }}
+  .audio-only .icon {{ font-size: 3rem; margin-bottom: 10px; }}
+  .audio-only .label {{ color: #aaa; font-size: 0.9rem; }}
 </style>
 </head>
 <body>
 <h1>Stream Player</h1>
 <div class="controls">
-  <select id="videoSelect">{video_options}</select>
-  <select id="audioSelect"><option value="">No audio</option>{audio_options}</select>
-  <button id="playBtn">Play</button>
+{controls_html.format(video_options=video_options, audio_options=audio_options)}
 </div>
-<div class="player">
-  <img id="video" alt="video stream">
-  <div class="status" id="status">Stopped</div>
-</div>
+{video_section}
+{"<div class='audio-only' id='audioPlayer'><div class='icon'>&#9835;</div><div class='label'>Audio stream</div></div>" if not has_video else ""}
 <div class="volume">
   <label for="volumeSlider">Vol:</label>
   <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1">
@@ -60,40 +81,36 @@ class PlayerHandler:
 </div>
 <audio id="audio" autoplay></audio>
 <script>
-  const videoImg = document.getElementById('video');
+  {video_js}
   const audioEl = document.getElementById('audio');
-  const statusEl = document.getElementById('status');
-  const videoSelect = document.getElementById('videoSelect');
-  const audioSelect = document.getElementById('audioSelect');
   const playBtn = document.getElementById('playBtn');
   const volumeSlider = document.getElementById('volumeSlider');
   const volumeVal = document.getElementById('volumeVal');
   let playing = false;
+  {'const audioSelect = document.getElementById("audioSelect");' if has_audio else ''}
 
   function startStreams() {{
-    const vUrl = videoSelect.value;
-    if (!vUrl) return;
-    videoImg.src = vUrl;
-    const aUrl = audioSelect.value;
-    if (aUrl) {{
+    {'const vUrl = videoSelect.value;' if has_video else ''}
+    {'if (!vUrl) return;' if has_video else ''}
+    {f'videoImg.src = vUrl;' if has_video else ''}
+    {'const aUrl = audioSelect.value;' if has_audio else ''}
+    {f'''if (aUrl) {{
       audioEl.src = aUrl;
       audioEl.play().catch(() => {{}});
     }} else {{
       audioEl.src = '';
-    }}
-    statusEl.textContent = 'Playing';
-    statusEl.className = 'status';
+    }}''' if has_audio else ''}
+    {f"statusEl.textContent = 'Playing'; statusEl.className = 'status';" if has_video else ''}
     playing = true;
     playBtn.textContent = 'Stop';
     playBtn.classList.add('active');
   }}
 
   function stopStreams() {{
-    videoImg.src = '';
+    {f"videoImg.src = '';" if has_video else ''}
     audioEl.pause();
     audioEl.src = '';
-    statusEl.textContent = 'Stopped';
-    statusEl.className = 'status error';
+    {f"statusEl.textContent = 'Stopped'; statusEl.className = 'status error';" if has_video else ''}
     playing = false;
     playBtn.textContent = 'Play';
     playBtn.classList.remove('active');
@@ -103,24 +120,9 @@ class PlayerHandler:
     playing ? stopStreams() : startStreams();
   }});
 
-  videoSelect.addEventListener('change', () => {{
-    if (playing) {{
-      videoImg.src = videoSelect.value;
-    }}
-  }});
+  {'videoSelect.addEventListener("change", () => {{ if (playing) {{ videoImg.src = videoSelect.value; }} }});' if has_video else ''}
 
-  audioSelect.addEventListener('change', () => {{
-    if (playing) {{
-      const aUrl = audioSelect.value;
-      if (aUrl) {{
-        audioEl.src = aUrl;
-        audioEl.play().catch(() => {{}});
-      }} else {{
-        audioEl.pause();
-        audioEl.src = '';
-      }}
-    }}
-  }});
+  {'audioSelect.addEventListener("change", () => {{ if (playing) {{ const aUrl = audioSelect.value; if (aUrl) {{ audioEl.src = aUrl; audioEl.play().catch(() => {{}}); }} else {{ audioEl.pause(); audioEl.src = ""; }} }} }});' if has_audio else ''}
 
   volumeSlider.addEventListener('input', () => {{
     const v = parseFloat(volumeSlider.value);
@@ -129,19 +131,14 @@ class PlayerHandler:
   }});
 
   audioEl.addEventListener('playing', () => {{
-    statusEl.textContent = 'Playing (audio synced)';
+    {f"statusEl.textContent = 'Playing (audio synced)';" if has_video else ''}
   }});
 
   audioEl.addEventListener('error', () => {{
-    if (playing) statusEl.textContent = 'Playing (video only)';
+    {f"if (playing) statusEl.textContent = 'Playing (video only)';" if has_video else ''}
   }});
 
-  videoImg.addEventListener('error', () => {{
-    if (playing) {{
-      statusEl.textContent = 'Connection lost';
-      statusEl.className = 'status error';
-    }}
-  }});
+  {'videoImg.addEventListener("error", () => {{ if (playing) {{ statusEl.textContent = "Connection lost"; statusEl.className = "status error"; }} }});' if has_video else ''}
 </script>
 </body>
 </html>"""

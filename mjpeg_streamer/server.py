@@ -134,6 +134,8 @@ class Server:
                 text += f"<a href='http://{self._host[0]}:{self._port}{route}'>{route}</a>\n<br>\n"
         if self._cap_routes and self._audio_routes:
             text += f"<h2><a href='http://{self._host[0]}:{self._port}/player'>Player (synced audio+video)</a></h2>"
+        elif self._audio_routes:
+            text += f"<h2><a href='http://{self._host[0]}:{self._port}/player'>Player</a></h2>"
         return aiohttp.web.Response(text=text, content_type="text/html")
 
     def add_stream(self, stream: Union[StreamBase, AudioStream]) -> None:
@@ -152,14 +154,14 @@ class Server:
                 raise ValueError(f"A stream with the name {route} already exists")
             self._cap_routes.append(route)
             self._app.router.add_route("GET", route, _StreamHandler(stream))
-        if self._cap_routes and self._audio_routes:
+        if self._audio_routes:
             from .player import PlayerHandler
 
             self._app.router.add_route("GET", "/player", PlayerHandler(self))
 
     def __start_func(self) -> None:
         self._app.router.add_route("GET", "/", self.__root_handler)
-        if self._cap_routes and self._audio_routes:
+        if self._audio_routes:
             from .player import PlayerHandler
 
             self._app.router.add_route("GET", "/player", PlayerHandler(self))
@@ -188,7 +190,6 @@ class Server:
                 print("\nAudio streams:\n")
                 for route in self._audio_routes:
                     print(f"http://{addr}:{self._port!s}{route}")
-            if self._cap_routes and self._audio_routes:
                 print(f"\nPlayer: http://{addr}:{self._port!s}/player")
             print("--------------------------------\n")
         print("\nPress Ctrl+C to stop the server\n")
