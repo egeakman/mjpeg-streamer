@@ -4,9 +4,9 @@ OctoPrint, Home Assistant, VLC and browsers read these bytes, so they must not d
 """
 
 import pytest
-from conftest import solid
 
 from mjpeg_streamer import Stream
+from tests.helpers import solid
 
 pytestmark = pytest.mark.contract
 

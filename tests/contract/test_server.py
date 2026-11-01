@@ -4,9 +4,9 @@ import http.client
 import inspect
 
 import pytest
-from conftest import solid
 
 from mjpeg_streamer import MjpegServer, Stream
+from tests.helpers import solid
 
 pytestmark = pytest.mark.contract
 

@@ -12,7 +12,8 @@ import sys
 import cv2
 import numpy as np
 import pytest
-from conftest import free_port, wait_for_port
+
+from tests.helpers import free_port, wait_for_port
 
 pytestmark = [pytest.mark.contract, pytest.mark.cli]
 

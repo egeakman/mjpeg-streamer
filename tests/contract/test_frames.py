@@ -5,9 +5,9 @@ import time
 import cv2
 import numpy as np
 import pytest
-from conftest import decode, solid
 
 from mjpeg_streamer import Stream
+from tests.helpers import decode, solid
 
 pytestmark = pytest.mark.contract
 
