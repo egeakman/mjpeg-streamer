@@ -104,7 +104,9 @@ def view(port: int, until: float, stats: ViewerStats) -> None:
     conn.close()
 
 
-def run_case(viewers: int, seconds: float, warmup: float, fps: int) -> dict:
+def run_case(
+    viewers: int, seconds: float, warmup: float, fps: int, size: str, quality: int
+) -> dict:
     port = free_port()
     server = subprocess.Popen(
         [
@@ -114,6 +116,10 @@ def run_case(viewers: int, seconds: float, warmup: float, fps: int) -> dict:
             str(port),
             "--fps",
             str(fps),
+            "--size",
+            size,
+            "--quality",
+            str(quality),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -158,6 +164,10 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=10)
     parser.add_argument("--warmup", type=float, default=2)
     parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument(
+        "--size", default="640x480", help="stream output size, WIDTHxHEIGHT"
+    )
+    parser.add_argument("--quality", type=int, default=50)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
 
@@ -168,7 +178,11 @@ def main() -> None:
         "opencv": cv2.__version__,
         "machine": f"{platform.system()} {platform.machine()}, {os.cpu_count()} CPUs",
     }
-    results = [run_case(n, args.seconds, args.warmup, args.fps) for n in args.viewers]
+    results = [
+        run_case(n, args.seconds, args.warmup, args.fps, args.size, args.quality)
+        for n in args.viewers
+    ]
+    env["stream"] = f"{args.size} q{args.quality} @ {args.fps} fps"
     print(json.dumps(env))
     print("| Viewers | fps mean (min) | Latency p50 / p95 | Server CPU | Egress |")
     print("|---|---|---|---|---|")
