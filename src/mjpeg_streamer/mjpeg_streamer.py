@@ -2,7 +2,6 @@ import asyncio
 import threading
 import time
 from collections import deque
-from typing import List, Optional, Tuple, Union
 
 import aiohttp
 import cv2
@@ -16,7 +15,7 @@ class Stream:
     def __init__(
         self,
         name: str,
-        size: Optional[Tuple[int, int]] = None,
+        size: tuple[int, int] | None = None,
         quality: int = 50,
         fps: int = 30,
     ) -> None:
@@ -89,7 +88,7 @@ class _StreamHandler:
 
 
 class MjpegServer:
-    def __init__(self, host: Union[str, int] = "localhost", port: int = 8080) -> None:
+    def __init__(self, host: str | int = "localhost", port: int = 8080) -> None:
         if isinstance(host, str) and host != "0.0.0.0":
             self._host = [host]
         elif isinstance(host, list):
@@ -110,7 +109,7 @@ class MjpegServer:
         self._port = port
         self._app = web.Application()
         self._app.is_running = False
-        self._cap_routes: List[str,] = []
+        self._cap_routes: list[str] = []
 
     def is_running(self) -> bool:
         return self._app.is_running

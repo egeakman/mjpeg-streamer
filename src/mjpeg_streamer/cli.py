@@ -1,7 +1,6 @@
 import argparse
 import re
 import threading
-from typing import List, Tuple, Union
 
 import cv2
 
@@ -34,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     )
     args: argparse.Namespace = parser.parse_args()
     args.prefix = re.sub("[^0-9a-zA-Z]+", "_", args.prefix)
-    args.source: List[Union[int, str],] = [[0]] if args.source is None else args.source
+    args.source: list[int | str] = [[0]] if args.source is None else args.source
     args.source = [item for sublist in args.source for item in sublist]
     args.source = list(set(args.source))
     return args
@@ -60,17 +59,17 @@ def run(
 
 def main() -> None:
     args = parse_args()
-    size: Tuple[int, int] = (args.width, args.height)
+    size: tuple[int, int] = (args.width, args.height)
     server = MjpegServer(args.host, args.port)
-    threads: List[threading.Thread,] = []
-    stop_events: List[threading.Event,] = []
+    threads: list[threading.Thread] = []
+    stop_events: list[threading.Event] = []
 
     if args.show_bandwidth:
         global bandwidth
         bandwidth = {}  # dict[str, int]
 
     for source in args.source:
-        source: Union[int, str] = int(source) if str(source).isdigit() else source
+        source: int | str = int(source) if str(source).isdigit() else source
         cap = cv2.VideoCapture(source)
         source_display = (
             re.sub("[^0-9a-zA-Z]+", "_", source) if isinstance(source, str) else source
