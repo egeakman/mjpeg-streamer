@@ -57,6 +57,8 @@ scripts.mjpeg-streamer = "mjpeg_streamer.cli:main"
 
 [dependency-groups]
 dev = [
+  "pytest>=8",
+  "pytest-timeout>=2.3",
   "ruff>=0.14",
 ]
 
@@ -79,3 +81,12 @@ lint.per-file-ignores."src/mjpeg_streamer/cli.py" = [
 [tool.pyright]
 venv = ".venv"
 venvPath = "."
+
+[tool.pytest]
+addopts = [ "-ra", "--strict-markers" ]
+markers = [
+  "cli: runs the mjpeg-streamer command in a subprocess",
+  "contract: Behavior Contract test; must also pass against the 2024.2.8 release (CI baseline job)",
+]
+testpaths = [ "tests" ]
+timeout = "60"
