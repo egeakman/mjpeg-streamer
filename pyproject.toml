@@ -57,6 +57,7 @@ scripts.mjpeg-streamer = "mjpeg_streamer.cli:main"
 
 [dependency-groups]
 dev = [
+  "psutil>=5.9",
   "pytest>=8",
   "pytest-timeout>=2.3",
   "ruff>=0.14",
