@@ -1,29 +1,29 @@
 [build-system]
-build-backend = "hatchling.build"
-requires = [
-  "hatchling",
-]
+build-backend = "uv_build"
+requires = [ "uv-build>=0.13.6,<0.14" ]
 
 [project]
 name = "mjpeg-streamer"
+version = "2024.2.8"
 description = "Simple, flexible and efficient MJPEG video streamer for Python"
 readme = "README.md"
 keywords = [
   "aiohttp",
   "asyncio",
   "computer-vision",
-  "MJPEG",
+  "mjpeg",
   "multi-camera",
-  "OpenCV",
+  "opencv",
   "server",
   "streamer",
   "streaming",
   "video",
   "webcam",
 ]
-license = {text = "AGPLv3"}
-authors = [{name = "Ege Akman", email = "me@egeakman.dev"}]
-requires-python = ">=3.6"
+license = "AGPL-3.0-or-later"
+license-files = [ "LICENSE" ]
+authors = [ { name = "Ege Akman", email = "me@egeakman.dev" } ]
+requires-python = ">=3.10"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Web Environment",
@@ -31,52 +31,29 @@ classifiers = [
   "Framework :: AsyncIO",
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
-  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
-  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: MacOS",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.6",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
   "Topic :: Multimedia :: Video",
-  "Topic :: Security",
-]
-dynamic = [
-  "version",
 ]
 dependencies = [
-  'aiohttp==3.8.6; python_version >= "3.6" and python_version <= "3.7"',
-  'aiohttp==3.9.1; python_version == "3.8"',
-  'aiohttp; python_version >= "3.9"',
-  "netifaces",
-  'numpy==1.19.5; python_version == "3.6"',
-  'numpy==1.21.6; python_version == "3.7"',
-  'numpy==1.24.4; python_version == "3.8"',
-  'numpy; python_version >= "3.9"',
-  'opencv-python==4.6.0.66; python_version == "3.6"',
-  'opencv-python==4.8.1.78; python_version >= "3.7" and python_version <= "3.8"',
-  'opencv-python; python_version >= "3.9"',
+  "aiohttp>=3.11",
+  "netifaces>=0.11",
+  "numpy>=1.24",
+  "opencv-python>=4.8.1.78",
 ]
-[project.urls]
-Homepage = "https://github.com/egeakman/mjpeg-streamer"
-Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
-Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
-[project.scripts]
-mjpeg-streamer = "mjpeg_streamer.cli:main"
-
-[tool.hatch.build]
-packages = ["mjpeg_streamer"]
-exclude = ["examples"]
-isolated = true
-
-[tool.hatch.version]
-path = "mjpeg_streamer/__init__.py"
+urls.Homepage = "https://github.com/egeakman/mjpeg-streamer"
+urls.Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
+urls.Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
+scripts.mjpeg-streamer = "mjpeg_streamer.cli:main"
 
 [tool.ruff]
 exclude = ["examples"]
