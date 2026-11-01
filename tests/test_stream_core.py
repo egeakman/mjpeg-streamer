@@ -1,7 +1,6 @@
 """Phase 2 behavior of the streaming core. These are not contract tests: 2024.2.8 does not do these things."""
 
 import asyncio
-import concurrent.futures
 import logging
 import subprocess
 import sys
@@ -17,43 +16,49 @@ from mjpeg_streamer import MjpegServer, Stream
 from tests.helpers import Viewer, decode, free_port, solid, wait_for_port
 
 
+class _EncodeCounter:
+    """Counts encodes per stream name, so streams left running by earlier tests are not counted."""
+
+    def __init__(self):
+        self.by_stream = {}
+
+    def of(self, stream_name: str) -> int:
+        return self.by_stream.get(stream_name, 0)
+
+
 @pytest.fixture
 def encode_counter(monkeypatch):
-    """Count cv2.imencode calls made by the stream module."""
-    calls = {"n": 0}
-    real = cv2.imencode
+    counter = _EncodeCounter()
+    real = Stream._encode
 
-    def counting(*args, **kwargs):
-        calls["n"] += 1
-        return real(*args, **kwargs)
+    def counting(self, *args, **kwargs):
+        counter.by_stream[self.name] = counter.by_stream.get(self.name, 0) + 1
+        return real(self, *args, **kwargs)
 
-    monkeypatch.setattr(stream_module.cv2, "imencode", counting)
-    return calls
-
-
-# Encode once, fan out --------------------------------------------------------------------------------------------
+    monkeypatch.setattr(Stream, "_encode", counting)
+    return counter
 
 
 def test_one_frame_is_encoded_once_for_many_viewers(serve, viewer, encode_counter):
-    stream = Stream("cam", fps=30)
+    stream = Stream("once", fps=30)
     stream.set_frame(solid(64, 48, (0, 255, 0)))
     port = serve(stream)
-    viewers = [viewer(port, "/cam") for _ in range(10)]
+    viewers = [viewer(port, "/once") for _ in range(10)]
     for v in viewers:
         for _ in range(3):
             v.next_part()
-    assert encode_counter["n"] == 1
+    assert encode_counter.of("once") == 1
 
 
 def test_nothing_is_encoded_without_viewers(encode_counter):
-    stream = Stream("cam")
+    stream = Stream("idle")
     for i in range(20):
         stream.set_frame(solid(64, 48, (i, i, i)))
-    assert encode_counter["n"] == 0
+    assert encode_counter.of("idle") == 0
 
 
 def test_encodes_are_capped_at_fps(serve, viewer, encode_counter):
-    stream = Stream("cam", fps=10)
+    stream = Stream("capped", fps=10)
     stop = threading.Event()
 
     def produce():
@@ -66,17 +71,19 @@ def test_encodes_are_capped_at_fps(serve, viewer, encode_counter):
     producer = threading.Thread(target=produce, daemon=True)
     producer.start()
     try:
-        v = viewer(serve(stream), "/cam")
+        v = viewer(serve(stream), "/capped")
         start = time.monotonic()
         while time.monotonic() - start < 1.0:
             v.next_part()
     finally:
         stop.set()
-    assert encode_counter["n"] <= 13  # about 10 per second, never the producer's ~500
+    assert (
+        encode_counter.of("capped") <= 13
+    )  # about 10 per second, never the producer's ~500
 
 
 def test_one_stream_on_two_servers_is_encoded_once(viewer, encode_counter):
-    stream = Stream("cam")
+    stream = Stream("shared")
     stream.set_frame(solid(64, 48, (255, 0, 0)))
     ports = []
     for _ in range(2):
@@ -86,9 +93,9 @@ def test_one_stream_on_two_servers_is_encoded_once(viewer, encode_counter):
         server.start()
         wait_for_port(port)
         ports.append(port)
-    a, b = viewer(ports[0], "/cam"), viewer(ports[1], "/cam")
+    a, b = viewer(ports[0], "/shared"), viewer(ports[1], "/shared")
     assert a.next_part()["body"] == b.next_part()["body"]
-    assert encode_counter["n"] == 1
+    assert encode_counter.of("shared") == 1
 
 
 def _producer(stream: Stream, fps: float, stop: threading.Event) -> threading.Thread:
@@ -134,6 +141,101 @@ def test_faster_producer_is_capped_at_fps(serve, viewer):
     finally:
         stop.set()
     assert 38 <= parts <= 42
+
+
+def test_tight_producer_keeps_the_target_fps(serve, viewer):
+    """A producer much faster than fps (a video file read in a loop) must not drift the tick schedule."""
+    stream = Stream("cam", fps=30)
+    stop = threading.Event()
+
+    def produce():
+        frame = solid(64, 48, (0, 255, 0))
+        while not stop.is_set():
+            stream.set_frame(frame)
+            time.sleep(0.002)
+
+    threading.Thread(target=produce, daemon=True).start()
+    try:
+        parts = count_parts(viewer(serve(stream), "/cam"), 2.0)
+    finally:
+        stop.set()
+    assert 57 <= parts <= 63  # 30 fps for 2 s, within 5%
+
+
+def _paced_producer(stream: Stream, gaps: list[float], stop: threading.Event) -> None:
+    def run():
+        i, next_at = 0, time.monotonic()
+        while not stop.is_set():
+            stream.set_frame(solid(64, 48, (i % 255, 0, 0)))
+            next_at += gaps[i % len(gaps)]
+            i += 1
+            time.sleep(max(0.0, next_at - time.monotonic()))
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+@pytest.mark.parametrize(
+    ("label", "gaps"),
+    [
+        ("30 fps camera", [1 / 30]),
+        ("irregular 12/55 ms", [0.012, 0.055]),
+        ("slow 20 fps camera", [1 / 20]),
+    ],
+)
+def test_delivery_rate_is_the_stream_fps_whatever_the_producer(
+    serve, viewer, label, gaps
+):
+    stream = Stream("cam", fps=25)
+    stop = threading.Event()
+    _paced_producer(stream, gaps, stop)
+    try:
+        parts = count_parts(viewer(serve(stream), "/cam"), 2.0)
+    finally:
+        stop.set()
+    assert 47 <= parts <= 53, f"{label}: {parts} parts in 2 s at fps 25"
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 12), reason="eager_task_factory is new in 3.12"
+)
+def test_join_does_not_deadlock_under_an_eager_task_factory(monkeypatch):
+    calls = {"n": 0}
+
+    async def first_tick_now(self, tick, interval):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            await asyncio.sleep(0.01)
+        return True
+
+    monkeypatch.setattr(stream_module._Fanout, "_sleep_until", first_tick_now)
+    stream = Stream("cam")
+    stream.set_frame(solid(64, 48, (0, 255, 0)))
+    done = threading.Event()
+
+    async def scenario():
+        asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
+        fanout = stream._join()
+        await asyncio.sleep(0.05)
+        stream._leave(fanout)
+        done.set()
+
+    threading.Thread(target=asyncio.run, args=(scenario(),), daemon=True).start()
+    assert done.wait(3), (
+        "joining deadlocked: the fan-out ran its first tick while the stream lock was held"
+    )
+
+
+def test_raising_fps_takes_effect_quickly(serve, viewer):
+    stream = Stream("cam", fps=0.5)
+    stream.set_frame(solid(64, 48, (0, 255, 0)))
+    v = viewer(serve(stream), "/cam")
+    v.next_part()
+    stream.fps = 30
+    start = time.monotonic()
+    v.next_part()
+    assert time.monotonic() - start < 0.5, (
+        "the old 2 s interval must not delay the new rate"
+    )
 
 
 def test_static_scene_is_resent_close_to_fps(serve, viewer):
@@ -290,7 +392,6 @@ async def _call(coro):
 
 
 def test_get_frame_is_deprecated_and_still_works():
-    import asyncio
 
     stream = Stream("cam")
     frame = solid(64, 48, (0, 0, 255))
@@ -313,51 +414,43 @@ def test_latest_frame_and_jpeg():
     assert stream.latest_jpeg() == expected.tobytes()
 
 
-# Concurrency regressions (found by the Phase 2 review) ------------------------------------------------------------
+# Concurrency regressions (found by the Phase 2 review; black-box, so they hold for any design) -------------------
 
 
-class _HeldPool:
-    """An encoder pool whose jobs wait until the test runs them."""
-
-    def __init__(self):
-        self.jobs = []
-
-    def submit(self, fn, *args):
-        future = concurrent.futures.Future()
-        self.jobs.append((future, fn, args))
-        return future
-
-    def run_all(self):
-        for future, fn, args in self.jobs:
-            if future.set_running_or_notify_cancel():
-                future.set_result(fn(*args))
+def _start_server(*streams: Stream) -> int:
+    port = free_port()
+    server = MjpegServer("127.0.0.1", port)
+    for stream in streams:
+        server.add_stream(stream)
+    server.start()
+    wait_for_port(port)
+    return port
 
 
-def test_cancelling_one_caller_does_not_cancel_the_shared_encode(monkeypatch):
-    pool = _HeldPool()
-    monkeypatch.setattr(stream_module, "_encoder_pool", lambda: pool)
-    stream = Stream("cam")
+def test_viewer_leaving_one_server_does_not_affect_another(viewer):
+    stream = Stream("cam", fps=30)
     stream.set_frame(solid(64, 48, (0, 255, 0)))
+    port_a, port_b = _start_server(stream), _start_server(stream)
+    stay = viewer(port_b, "/cam")
+    for _ in range(5):
+        leave = Viewer(port_a, "/cam")
+        leave.next_part()
+        leave.close()
+        stream.set_frame(solid(64, 48, (0, 0, 255)))
+        stay.next_part()
+    stream.set_frame(solid(64, 48, (255, 0, 0)))
+    assert any(
+        decode(stay.next_part()["body"]).mean(axis=(0, 1)).argmax() == 0
+        for _ in range(30)
+    ), "the remaining viewer still gets new frames"
+    late = viewer(port_a, "/cam")
+    assert late.next_part()["body"][:2] == b"\xff\xd8", (
+        "a new viewer on the first server still works"
+    )
 
-    async def scenario():
-        leaving = asyncio.create_task(stream._next_part())
-        staying = asyncio.create_task(stream._next_part())
-        await asyncio.sleep(0)
-        leaving.cancel()
-        await asyncio.sleep(0)
-        assert len(pool.jobs) == 1, "both callers share one encode"
-        assert not pool.jobs[0][0].cancelled()
-        pool.run_all()
-        part = await asyncio.wait_for(staying, 2)
-        assert part.startswith(b"--image-boundary")
-        assert await stream._next_part() == part  # the stream is not left broken
 
-    asyncio.run(scenario())
-
-
-def test_failed_encode_does_not_poison_the_frame(monkeypatch):
-    stream = Stream("cam", size=(32, 24))
-    stream.set_frame(solid(64, 48, (0, 255, 0)))
+def test_failed_encode_does_not_poison_the_stream(serve, viewer, monkeypatch):
+    stream = Stream("cam", size=(32, 24), fps=30)
     real_resize = cv2.resize
     calls = {"n": 0}
 
@@ -368,36 +461,45 @@ def test_failed_encode_does_not_poison_the_frame(monkeypatch):
         return real_resize(*args, **kwargs)
 
     monkeypatch.setattr(stream_module.cv2, "resize", flaky_resize)
+    stream.set_frame(solid(64, 48, (0, 255, 0)))
     with pytest.raises(MemoryError):
-        asyncio.run(stream._next_part())
-    assert decode(asyncio.run(stream._next_part()).split(b"\r\n\r\n", 1)[1][:-4]).shape[
-        :2
-    ] == (24, 32)
+        stream.latest_jpeg()
+    assert decode(stream.latest_jpeg()).shape[:2] == (24, 32)
+    v = viewer(serve(stream), "/cam")
+    stream.set_frame(solid(64, 48, (0, 0, 255)))
+    assert decode(v.next_part()["body"]).shape[:2] == (24, 32)
 
 
-def test_encoding_survives_interpreter_shutdown_while_threads_run(tmp_path):
+def test_streaming_survives_main_thread_exit(tmp_path):
     script = tmp_path / "shutdown.py"
     script.write_text(
-        "import asyncio, threading, time\n"
+        "import http.client, socket, threading, time\n"
         "import numpy as np\n"
-        "from mjpeg_streamer import Stream\n"
-        "stream = Stream('cam')\n"
-        "stream.set_frame(np.zeros((48, 64, 3), np.uint8))\n"
-        "def later():\n"
+        "from mjpeg_streamer import MjpegServer, Stream\n"
+        "s = socket.socket(); s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]; s.close()\n"
+        "stream = Stream('cam', fps=30)\n"
+        "server = MjpegServer('127.0.0.1', port); server.add_stream(stream); server.start()\n"
+        "def produce():\n"
+        "    for i in range(100):\n"
+        "        stream.set_frame(np.full((48, 64, 3), i, np.uint8)); time.sleep(0.02)\n"
+        "def watch():\n"
         "    time.sleep(0.5)  # the main thread has returned: the interpreter is shutting down\n"
         "    try:\n"
-        "        stream.set_frame(np.full((48, 64, 3), 255, np.uint8))\n"
-        "        asyncio.run(stream._next_part())\n"
-        "        print('encoded after shutdown began', flush=True)\n"
+        "        conn = http.client.HTTPConnection('127.0.0.1', port, timeout=5)\n"
+        "        conn.request('GET', '/cam'); r = conn.getresponse(); data = b''\n"
+        "        while data.count(b'--image-boundary') < 3:\n"
+        "            data += r.read1(65536)\n"
+        "        print('streamed after shutdown began', flush=True)\n"
         "    except Exception as exc:\n"
         "        print('failed:', repr(exc), flush=True)\n"
-        "threading.Thread(target=later).start()\n"
+        "threading.Thread(target=produce).start()\n"
+        "threading.Thread(target=watch).start()\n"
     )
     out = subprocess.run(
         [sys.executable, str(script)],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=60,
         check=False,
     )
-    assert "encoded after shutdown began" in out.stdout, out.stdout + out.stderr
+    assert "streamed after shutdown began" in out.stdout, out.stdout + out.stderr

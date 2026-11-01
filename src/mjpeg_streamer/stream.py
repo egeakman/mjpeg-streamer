@@ -78,6 +78,18 @@ _pool: _EncoderPool | None = None
 _pool_lock = threading.Lock()
 
 
+def _forget_pool_after_fork() -> None:
+    global _pool, _pool_lock
+    _pool, _pool_lock = (
+        None,
+        threading.Lock(),
+    )  # the parent's worker threads do not exist in the child
+
+
+if hasattr(os, "register_at_fork"):  # Unix only
+    os.register_at_fork(after_in_child=_forget_pool_after_fork)
+
+
 def _encoder_pool() -> _EncoderPool:
     global _pool
     with _pool_lock:
@@ -199,11 +211,18 @@ class _Fanout:
         self.loop = loop
         self.viewers = 0
         self.sent = 0  # bytes written by this loop's viewers since the last flush
+        self.encode_error_logged = False
         self.waiter: asyncio.Future[bytes] = loop.create_future()
-        self.task = loop.create_task(self._run(), name=f"mjpeg-fanout:{stream.name}")
+        self.task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        """Start the ticker. Never call this holding the stream lock: an eager task factory runs it right away."""
+        self.task = self.loop.create_task(
+            self._run(), name=f"mjpeg-fanout:{self.stream.name}"
+        )
 
     async def _run(self) -> None:
-        tick = float("-inf")
+        served = float("-inf")
         try:
             while True:
                 interval = 1 / self.stream.fps
@@ -211,13 +230,23 @@ class _Fanout:
                 # Ticks sit just after the moment frames arrive (see Stream.set_frame), so a camera running at
                 # the stream's fps has each frame sent right away instead of waiting up to a full interval.
                 offset = self.stream._arrival_phase + min(interval / 4, 0.006)
-                next_tick = ((now - offset) // interval + 1) * interval + offset
-                # Woke a hair before the tick: don't serve it twice.
-                if next_tick <= tick + interval / 2:
-                    next_tick += interval
-                tick = next_tick
-                await asyncio.sleep(tick - now)
-                part = await self.stream._next_part()
+                tick = ((now - offset) // interval + 1) * interval + offset
+                # Never sooner than one interval after the last send: a phase shift or an early wake-up must not
+                # serve twice within an interval or push the rate above fps.
+                tick = max(tick, served + interval)
+                if not await self._sleep_until(tick, interval):
+                    continue  # fps changed while waiting: plan the next tick at the new rate
+                served = tick
+                try:
+                    part = await self.stream._next_part()
+                except Exception:
+                    if not self.encode_error_logged:
+                        log.exception(
+                            "Stream %r: encoding failed; retrying next tick",
+                            self.stream.name,
+                        )
+                        self.encode_error_logged = True
+                    continue
                 waiter, self.waiter = self.waiter, self.loop.create_future()
                 waiter.set_result(part)
                 self.flush()
@@ -229,6 +258,14 @@ class _Fanout:
             self._fail(
                 ConnectionResetError(f"delivery of stream {self.stream.name!r} stopped")
             )
+
+    async def _sleep_until(self, tick: float, interval: float) -> bool:
+        """Sleep until `tick`, in short steps so an fps change is noticed; False if fps changed meanwhile."""
+        while (remaining := tick - self.loop.time()) > 0:
+            await asyncio.sleep(min(remaining, 0.1))
+            if 1 / self.stream.fps != interval:
+                return False
+        return True
 
     def _fail(self, exc: BaseException) -> None:
         if not self.waiter.done():
@@ -277,9 +314,8 @@ class Stream:
         self._pending: concurrent.futures.Future[bytes] | None = None
         self._pending_key: tuple[int, int] | None = None
         self._fanouts: dict[asyncio.AbstractEventLoop, _Fanout] = {}
-        self._arrival_phase = (
-            0.0  # when, within a 1/fps interval, the latest frame arrived
-        )
+        self._arrival_phase = 0.0  # when, within a 1/fps interval, frames arrive
+        self._last_arrival = float("-inf")
         self._sent = _RateMeter()
         self._warned_encode_failure = False
 
@@ -327,7 +363,12 @@ class Stream:
         with self._lock:
             self._frame = frame
             self._frame_seq += 1
-            self._arrival_phase = now % (1 / self._fps)
+            # Align ticks to frames only when frames arrive at the stream's own rate (within 10%). Faster, slower or
+            # irregular producers would pull the schedule off fps, so for them the schedule stays where it is.
+            interval = 1 / self._fps
+            if 0.9 * interval <= now - self._last_arrival <= 1.1 * interval:
+                self._arrival_phase = now % interval
+            self._last_arrival = now
 
     def latest_frame(self) -> np.ndarray:
         """The latest frame, or the black placeholder if none was set yet."""
@@ -342,7 +383,9 @@ class Stream:
             part = self._part if self._part_key == key else None
             frame, size, quality = self._frame, self._size, self._quality
         if part is None:
-            part = self._encode(key, frame, size, quality)
+            part = self._encode_part(
+                key, frame, size, quality
+            )  # leaves the pool's pending encode alone
         return part[part.index(b"\r\n\r\n") + 4 : -len(_PART_TRAILER)]
 
     def get_bandwidth(self) -> float:
@@ -443,18 +486,22 @@ class Stream:
         loop = asyncio.get_running_loop()
         with self._lock:
             fanout = self._fanouts.get(loop)
-            if fanout is None or fanout.task.done():
+            new = fanout is None or fanout.task is None or fanout.task.done()
+            if new:
                 fanout = self._fanouts[loop] = _Fanout(self, loop)
             fanout.viewers += 1
+        if new:
+            fanout.start()
         return fanout
 
     def _leave(self, fanout: _Fanout) -> None:
         with self._lock:
             fanout.viewers -= 1
             if fanout.viewers == 0:
-                fanout.task.cancel()
                 if self._fanouts.get(fanout.loop) is fanout:
                     del self._fanouts[fanout.loop]
+                if fanout.task is not None:
+                    fanout.task.cancel()
         fanout.flush()
 
     def _viewer_count(self) -> int:

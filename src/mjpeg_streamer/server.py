@@ -33,8 +33,9 @@ def _stream_handler(
             status=200, reason="OK", headers={"Content-Type": CONTENT_TYPE}
         )
         await response.prepare(request)
-        fanout = stream._join()
+        fanout = None
         try:
+            fanout = stream._join()
             part = await stream._next_part()  # the first frame goes out right away
             while True:
                 await response.write(part)
@@ -45,7 +46,8 @@ def _stream_handler(
         except ConnectionError:
             log.debug("Viewer of %r disconnected (%s)", stream.name, request.remote)
         finally:
-            stream._leave(fanout)
+            if fanout is not None:
+                stream._leave(fanout)
         return response
 
     return handler
