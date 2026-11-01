@@ -55,22 +55,27 @@ urls.Issues = "https://github.com/egeakman/mjpeg-streamer/issues"
 urls.Releases = "https://github.com/egeakman/mjpeg-streamer/releases"
 scripts.mjpeg-streamer = "mjpeg_streamer.cli:main"
 
-[tool.ruff]
-exclude = ["examples"]
-fix = false
-ignore = [
-    "TID252", # Relative imports are banned | __init__.py
-    "T201", # `print` found | TODO: Migrate to logging
-    "S104", # Possible binding to all interfaces | False positive
-    "EM101", # Exception must not use a string literal
-    "EM102", # Exception must not use an f-string literal
-    "TRY003", # Avoid specifying long messages outside the exception class
-    "UP007", # Use `X | Y` for type annotations | Have to use `typing.Union` for Python 3.6 compatibility
-    "FBT001", # Boolean-typed positional argument in function definition
-    "FA100", # Missing `from __future__ import annotations` | It works without it
+[dependency-groups]
+dev = [
+  "ruff>=0.14",
 ]
 
-[tool.isort]
-profile = "black"
-known_first_party = "mjpeg_streamer"
-skip = ["examples"]
+[tool.ruff]
+extend-exclude = [ "examples" ]
+lint.ignore = [
+  "EM101",  # Exception must not use a string literal
+  "EM102",  # Exception must not use an f-string literal
+  "FBT001", # Boolean-typed positional argument in function definition
+  "S104",   # Binding to all interfaces: intended when the user asks for it (RULE-018)
+  "T201",   # `print` found | TODO: migrate to logging (Phase 3)
+  "TID252", # Relative imports are banned | __init__.py
+  "TRY003", # Avoid specifying long messages outside the exception class
+]
+lint.per-file-ignores."src/mjpeg_streamer/cli.py" = [
+  "BLE001",  # blind `except Exception` in the legacy shutdown path; CLI rewritten in Phase 4
+  "PLW0602", # `global bandwidth` without assignment; CLI rewritten in Phase 4
+]
+
+[tool.pyright]
+venv = ".venv"
+venvPath = "."
